@@ -480,6 +480,53 @@ function renderWishlist(items) {
   container.innerHTML = items.map(buildWishlistCard).join('');
 }
 
+// ── F-1 section ───────────────────────────────────────────────────────────────
+
+async function renderF1() {
+  const container = document.getElementById('f1-feed');
+  container.innerHTML = `
+    <div class="f1-card">
+      <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div>
+      <p class="feed-loading">Loading&hellip;</p>
+    </div>`;
+
+  let items = [];
+  try {
+    items = await fetchNews('"Formula 1" OR "Formula One" OR "F1" Grand Prix', 15);
+  } catch {}
+
+  // Prefer articles from the last 24 hours
+  const fresh = items.filter(i => i.date && (Date.now() - new Date(i.date).getTime()) < 86400000);
+  const article = fresh[0] || items[0];
+
+  if (!article) {
+    container.innerHTML = `
+      <div class="f1-card">
+        <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div>
+        <p class="f1-stale">No recent news found. Check back later.</p>
+      </div>`;
+    return;
+  }
+
+  const isFresh = fresh.length > 0;
+  const date = article.date
+    ? new Date(article.date).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+
+  container.innerHTML = `
+    <div class="f1-card">
+      <div class="f1-eyebrow">
+        <span class="f1-dot"></span>Formula 1
+        ${isFresh ? '<span class="f1-fresh">&#x25CF; LIVE</span>' : ''}
+      </div>
+      <a class="f1-headline" href="${escHtml(article.link)}" target="_blank" rel="noopener noreferrer">${escHtml(article.title)}</a>
+      <div class="f1-meta">
+        ${article.source ? escHtml(article.source) + (date ? ' &bull; ' : '') : ''}${date}
+        ${!isFresh ? '<br><span class="f1-stale">No updates in the last 24h &mdash; showing latest available</span>' : ''}
+      </div>
+    </div>`;
+}
+
 // ── Load everything ───────────────────────────────────────────────────────────
 
 function loadAllFeeds() {
@@ -490,6 +537,7 @@ function loadAllFeeds() {
   loadContactSection('prospects-feed', settings.prospects, 'prospect', 'Open Settings to add your prospects.');
   renderStocks(settings.tickers);
   renderWishlist(settings.wishlist);
+  renderF1();
 }
 
 // ── Settings modal ────────────────────────────────────────────────────────────
