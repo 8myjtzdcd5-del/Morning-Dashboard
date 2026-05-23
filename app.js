@@ -434,10 +434,17 @@ async function fetchStocks(symbols) {
   if (!symbols.length) return [];
   const results = await fetchYahooQuotes(symbols);
   return (results||[]).map(q=>({
-    symbol:q.symbol, name:q.shortName||q.longName||q.symbol,
-    price:q.regularMarketPrice, change:q.regularMarketChange,
-    changePct:q.regularMarketChangePercent,
-    time:q.regularMarketTime?new Date(q.regularMarketTime*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'',
+    symbol: q.symbol,
+    name: q.shortName||q.longName||q.symbol,
+    price: q.regularMarketPrice,
+    change: q.regularMarketChange,
+    changePct: q.regularMarketChangePercent,
+    marketState: q.marketState||'REGULAR',
+    lastTradeDate: q.regularMarketTime ? new Date(q.regularMarketTime*1000) : null,
+    prePrice: q.preMarketPrice||null,
+    preChangePct: q.preMarketChangePercent||null,
+    postPrice: q.postMarketPrice||null,
+    postChangePct: q.postMarketChangePercent||null,
   }));
 }
 
@@ -448,13 +455,23 @@ function renderStocks(tickers) {
   fetchStocks(tickers).then(stocks=>{
     if (!stocks.length) { container.innerHTML=buildEmptyState('No data returned.','Check your ticker symbols.'); return; }
     container.innerHTML=stocks.map(s=>{
-      const up=s.change>=0,sign=up?'+':'',fmt=n=>n!=null?n.toFixed(2):'—';
+      const up=s.change>=0, sign=up?'+':'', fmt=n=>n!=null?n.toFixed(2):'—';
+      const closed = s.marketState==='CLOSED' || s.marketState==='PREPRE' || s.marketState==='POSTPOST';
+      const pre    = s.marketState==='PRE'  && s.prePrice!=null;
+      const post   = s.marketState==='POST' && s.postPrice!=null;
+      const dateStr = s.lastTradeDate
+        ? s.lastTradeDate.toLocaleDateString('en-US',{month:'short',day:'numeric'})
+        : '';
+      const extPrice = pre ? s.prePrice : post ? s.postPrice : null;
+      const extPct   = pre ? s.preChangePct : post ? s.postChangePct : null;
+      const extLabel = pre ? 'Pre-mkt' : 'After-hrs';
       return `<div class="stock-card ${up?'up':'down'}">
         <div class="stock-symbol">${escHtml(s.symbol)}</div>
         <div class="stock-name">${escHtml(s.name)}</div>
         <div class="stock-price">$${fmt(s.price)}</div>
         <div class="stock-change">${sign}${fmt(s.change)} (${sign}${fmt(s.changePct)}%)</div>
-        ${s.time?`<div class="stock-time">As of ${s.time}</div>`:''}
+        ${closed&&dateStr ? `<div class="stock-time stock-closed">&#x25CF; Closed &mdash; last ${dateStr}</div>` : ''}
+        ${extPrice!=null ? `<div class="stock-ext">${extLabel}: $${fmt(extPrice)} (${extPct>=0?'+':''}${fmt(extPct)}%)</div>` : ''}
       </div>`;
     }).join('');
   }).catch(()=>{ container.innerHTML=buildEmptyState('Stock data unavailable.','Markets may be closed or the service is down.'); });

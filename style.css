@@ -94,7 +94,7 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 }
 .market-item:last-child { border-right: none; padding-right: 0; margin-right: 0; }
 
-.market-label { font-size: 0.68rem; font-weight: 700; color: rgba(255,255,255,0.45); text-transform: uppercase; letter-spacing: 0.05em; }
+.market-label { font-size: 0.68rem; font-weight: 700; color: #f87171; text-transform: uppercase; letter-spacing: 0.05em; }
 .market-price { font-size: 0.85rem; font-weight: 700; color: #fff; }
 .market-chg   { font-size: 0.72rem; font-weight: 600; }
 .market-chg.up   { color: #4ade80; }
@@ -373,6 +373,8 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .stock-card.up   .stock-change { color: var(--green); }
 .stock-card.down .stock-change { color: var(--red); }
 .stock-time { font-size: 0.63rem; color: var(--text-muted); margin-top: 4px; }
+.stock-closed { color: #f59e0b; }
+.stock-ext { font-size: 0.63rem; color: var(--text-muted); margin-top: 2px; }
 
 /* ── Wish List ───────────────────────────────────────── */
 
