@@ -333,60 +333,62 @@ function buildForecastStrip(daily) {
   }).join('')}</div>`;
 }
 
-function renderWeather(location, attempt=1) {
+function buildWeatherHtml({wx, displayName}) {
+  const cur = wx.current;
+  return `<div class="weather-card">
+    <div class="weather-temp-block">
+      <div class="weather-temp">${Math.round(cur.temperature_2m)}&deg;F</div>
+      <div class="weather-temp-alt">${Math.round((cur.temperature_2m-32)*5/9)}&deg;C</div>
+    </div>
+    <div class="weather-info">
+      <div class="weather-desc">${wmoDesc(cur.weather_code)}</div>
+      <div class="weather-location">${escHtml(displayName)}</div>
+      <div class="weather-details">
+        <span>&#128167; ${cur.relative_humidity_2m}% humidity</span>
+        <span>&#128168; ${Math.round(cur.wind_speed_10m)} mph wind</span>
+        <span>Feels like ${Math.round(cur.apparent_temperature)}&deg;F</span>
+      </div>
+      ${buildRainHtml(wx.hourly)}
+      ${buildForecastStrip(wx.daily)}
+    </div>
+  </div>`;
+}
+
+function renderWeather(location) {
   const el = document.getElementById('weather-content');
-  if (attempt===1) el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
-  fetchWeather(location).then(({wx,displayName})=>{
-    const cur = wx.current;
-    el.innerHTML = `<div class="weather-card">
-      <div class="weather-temp-block">
-        <div class="weather-temp">${Math.round(cur.temperature_2m)}&deg;F</div>
-        <div class="weather-temp-alt">${Math.round((cur.temperature_2m-32)*5/9)}&deg;C</div>
-      </div>
-      <div class="weather-info">
-        <div class="weather-desc">${wmoDesc(cur.weather_code)}</div>
-        <div class="weather-location">${escHtml(displayName)}</div>
-        <div class="weather-details">
-          <span>&#128167; ${cur.relative_humidity_2m}% humidity</span>
-          <span>&#128168; ${Math.round(cur.wind_speed_10m)} mph wind</span>
-          <span>Feels like ${Math.round(cur.apparent_temperature)}&deg;F</span>
-        </div>
-        ${buildRainHtml(wx.hourly)}
-        ${buildForecastStrip(wx.daily)}
-      </div>
-    </div>`;
+  const cached = loadCache('mdWeatherCache');
+  if (cached) el.innerHTML = buildWeatherHtml(cached.data);
+  else el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
+  fetchWeather(location).then(data=>{
+    saveCache('mdWeatherCache', data);
+    el.innerHTML = buildWeatherHtml(data);
   }).catch(()=>{
-    if (attempt<3) { setTimeout(()=>renderWeather(location,attempt+1), 3000); return; }
-    el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(location)}&rdquo;. Check Settings or try refreshing.</span>`;
+    if (!cached) el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(location)}&rdquo;. Check Settings or try refreshing.</span>`;
   });
 }
 
 // ── Quote of the day (ZenQuotes, CORS-native) ─────────────────────────────────
 
+function buildQuoteHtml(q) {
+  return `<div class="quote-card">
+    <div class="quote-mark">&ldquo;</div>
+    <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
+    <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
+  </div>`;
+}
+
 async function renderQuote() {
   const el = document.getElementById('quote-feed');
-  el.innerHTML = '<p class="feed-loading">Loading quote&hellip;</p>';
+  const cached = loadCache('mdQuoteCache');
+  if (cached) el.innerHTML = buildQuoteHtml(cached.data);
+  else el.innerHTML = '<p class="feed-loading">Loading quote&hellip;</p>';
   try {
-    const resp = await fetch('https://zenquotes.io/api/today', {signal:sig(6000)});
-    const [q] = await resp.json();
-    el.innerHTML = `<div class="quote-card">
-      <div class="quote-mark">&ldquo;</div>
-      <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
-      <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
-    </div>`;
-  } catch {
-    try {
-      const contents = await proxyFetch('https://zenquotes.io/api/today', 6000);
-      const [q] = JSON.parse(contents);
-      el.innerHTML = `<div class="quote-card">
-        <div class="quote-mark">&ldquo;</div>
-        <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
-        <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
-      </div>`;
-    } catch {
-      el.innerHTML = '<p class="feed-loading">Quote unavailable today.</p>';
-    }
-  }
+    let q;
+    try { const resp = await fetch('https://zenquotes.io/api/today',{signal:sig(6000)}); [q]=await resp.json(); }
+    catch { const c=await proxyFetch('https://zenquotes.io/api/today',6000); [q]=JSON.parse(c); }
+    saveCache('mdQuoteCache', q);
+    el.innerHTML = buildQuoteHtml(q);
+  } catch { if (!cached) el.innerHTML='<p class="feed-loading">Quote unavailable today.</p>'; }
 }
 
 // ── Special Dates ─────────────────────────────────────────────────────────────
@@ -548,7 +550,7 @@ function loadSection(containerId, items, prefix) {
 
 function contactLabel(e) { return [e.name,e.company].filter(Boolean).join(' · '); }
 
-function buildContactCard(entity, allArticles) {
+function buildContactCard(entity, allArticles, id='') {
   const recent=filterRecent(allArticles);
   const recentBody=recent.length>0
     ? `<ul class="news-list">${recent.map(a=>articleRow(a,false)).join('')}</ul>`
@@ -556,7 +558,7 @@ function buildContactCard(entity, allArticles) {
   const histBody=allArticles.length>0
     ? `<ul class="news-list">${allArticles.map(a=>articleRow(a,true)).join('')}</ul>`
     : `<p class="feed-loading">History will build each time you open the dashboard.</p>`;
-  return `<div class="feed-card contact-card">
+  return `<div class="feed-card contact-card"${id?` id="${escHtml(id)}"`:''}
     <div class="feed-card-label"><span class="label-dot"></span>
       <span class="contact-name">${escHtml(entity.name||entity.company)}</span>
       ${entity.name&&entity.company?`<span class="contact-company">${escHtml(entity.company)}</span>`:''}
@@ -584,11 +586,17 @@ function wireTabSwitching(container) {
 function loadContactSection(containerId, entities, prefix, emptyHint) {
   const container=document.getElementById(containerId);
   if (!entities.length) { container.innerHTML=buildEmptyState('Nobody added yet.',emptyHint); return; }
-  container.innerHTML=entities.map(entity=>`
-    <div class="feed-card contact-card is-loading" id="${toCardId(prefix,entity.name+entity.company)}">
-      <div class="feed-card-label"><span class="label-dot"></span>${escHtml(contactLabel(entity))}</div>
-      <p class="feed-loading">Loading&hellip;</p>
-    </div>`).join('');
+  // Render immediately from stored history; show placeholder only when no history yet
+  container.innerHTML=entities.map(entity=>{
+    const cardId=toCardId(prefix,entity.name+entity.company);
+    const history=getHistory(histKey(entity.name,entity.company));
+    return history.length
+      ? buildContactCard(entity, history, cardId)
+      : `<div class="feed-card contact-card is-loading" id="${cardId}">
+          <div class="feed-card-label"><span class="label-dot"></span>${escHtml(contactLabel(entity))}</div>
+          <p class="feed-loading">Loading&hellip;</p>
+         </div>`;
+  }).join('');
   wireTabSwitching(container);
   entities.forEach(async entity=>{
     const key=histKey(entity.name,entity.company);
@@ -598,7 +606,7 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
     try { fresh=await fetchNewsQueued(query,20); } catch {}
     const allArticles=mergeHistory(key,fresh);
     const ph=document.getElementById(cardId);
-    if (ph) { const tmp=document.createElement('div'); tmp.innerHTML=buildContactCard(entity,allArticles); ph.replaceWith(tmp.firstElementChild); }
+    if (ph) { const tmp=document.createElement('div'); tmp.innerHTML=buildContactCard(entity,allArticles,cardId); ph.replaceWith(tmp.firstElementChild); }
   });
 }
 
@@ -668,21 +676,15 @@ function renderStocks(tickers) {
 
 // ── F-1 ───────────────────────────────────────────────────────────────────────
 
-async function renderF1() {
-  const container=document.getElementById('f1-feed');
-  container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
-  let items=[];
-  try { items=await fetchNewsQueued('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
+function buildF1Html(items) {
   const now=Date.now();
   const fresh=items.filter(i=>i.date&&(now-new Date(i.date).getTime())<86400000);
   const stories=(fresh.length>=2?fresh:items).slice(0,2);
-  if (!stories.length) { container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`; return; }
+  if (!stories.length) return `<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`;
   const hasFresh=fresh.length>0;
-  const staleNote=!hasFresh?'<p class="f1-stale">No updates in 24h &mdash; showing latest</p>':'';
   const storiesHtml=stories.map(a=>{
     const date=a.date?new Date(a.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
     const meta=[a.source?escHtml(a.source):'',date].filter(Boolean).join(' &bull; ');
-    // description: strip title dupe, cap at 180 chars
     let desc=(a.description||'').replace(/<[^>]*>/g,'').trim();
     if (desc.toLowerCase().startsWith(a.title.toLowerCase().slice(0,30))) desc='';
     if (desc.length>180) desc=desc.slice(0,177)+'&hellip;';
@@ -692,10 +694,21 @@ async function renderF1() {
       ${meta?`<div class="f1-meta">${meta}</div>`:''}
     </div>`;
   }).join('');
-  container.innerHTML=`<div class="f1-card">
+  return `<div class="f1-card">
     <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1 ${hasFresh?'<span class="f1-fresh">&#x25CF; TODAY</span>':''}</div>
-    ${storiesHtml}${staleNote}
+    ${storiesHtml}${!hasFresh?'<p class="f1-stale">No updates in 24h &mdash; showing latest</p>':''}
   </div>`;
+}
+
+async function renderF1() {
+  const container=document.getElementById('f1-feed');
+  const cached=loadCache('mdF1Cache');
+  if (cached) container.innerHTML=buildF1Html(cached.data);
+  else container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
+  let items=[];
+  try { items=await fetchNewsQueued('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
+  if (items.length) { saveCache('mdF1Cache',items); container.innerHTML=buildF1Html(items); }
+  else if (!cached) container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`;
 }
 
 // ── Wish List ─────────────────────────────────────────────────────────────────
