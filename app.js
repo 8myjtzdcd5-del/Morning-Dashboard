@@ -694,11 +694,44 @@ function renderStocks(tickers) {
 
 // ── F-1 ───────────────────────────────────────────────────────────────────────
 
-function buildF1Html(items) {
+async function fetchNextF1Race() {
+  try {
+    const r = await fetch('https://api.jolpi.ca/ergast/f1/current/next.json', {signal: sig(8000)});
+    const data = await r.json();
+    const race = data?.MRData?.RaceTable?.Races?.[0];
+    if (!race) return null;
+    return {
+      name: race.raceName,
+      circuit: race.Circuit?.circuitName || '',
+      locality: race.Circuit?.Location?.locality || '',
+      country: race.Circuit?.Location?.country || '',
+      date: race.date,
+      time: race.time || null,
+    };
+  } catch { return null; }
+}
+
+function buildF1RaceHtml(race) {
+  if (!race) return '';
+  const dt = race.time
+    ? new Date(`${race.date}T${race.time}`)
+    : new Date(`${race.date}T12:00:00`);
+  const dateStr = dt.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+  const timeStr = race.time
+    ? dt.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', timeZoneName:'short'})
+    : '';
+  return `<div class="f1-next-race">
+    <div class="f1-next-label">&#x1F3C1; Next Race</div>
+    <div class="f1-next-name">${escHtml(race.name)}</div>
+    <div class="f1-next-loc">${escHtml([race.circuit, race.locality, race.country].filter(Boolean).join(' &middot; '))}</div>
+    <div class="f1-next-dt">${escHtml(dateStr)}${timeStr ? ` &middot; ${escHtml(timeStr)}` : ''}</div>
+  </div>`;
+}
+
+function buildF1Html(items, race) {
   const now=Date.now();
   const fresh=items.filter(i=>i.date&&(now-new Date(i.date).getTime())<86400000);
   const stories=(fresh.length>=2?fresh:items).slice(0,2);
-  if (!stories.length) return `<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`;
   const hasFresh=fresh.length>0;
   const storiesHtml=stories.map(a=>{
     const date=a.date?new Date(a.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
@@ -712,21 +745,35 @@ function buildF1Html(items) {
       ${meta?`<div class="f1-meta">${meta}</div>`:''}
     </div>`;
   }).join('');
+  const newsSection = stories.length
+    ? `${storiesHtml}${!hasFresh?'<p class="f1-stale">No updates in 24h &mdash; showing latest</p>':''}`
+    : `<p class="f1-stale">No recent news found.</p>`;
   return `<div class="f1-card">
     <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1 ${hasFresh?'<span class="f1-fresh">&#x25CF; TODAY</span>':''}</div>
-    ${storiesHtml}${!hasFresh?'<p class="f1-stale">No updates in 24h &mdash; showing latest</p>':''}
+    ${buildF1RaceHtml(race)}
+    ${newsSection}
   </div>`;
 }
 
 async function renderF1() {
   const container=document.getElementById('f1-feed');
-  const cached=loadCache('mdF1Cache');
-  if (cached) container.innerHTML=buildF1Html(cached.data);
+  const cachedNews=loadCache('mdF1Cache');
+  const cachedRace=loadCache('mdF1Race');
+  if (cachedNews||cachedRace) container.innerHTML=buildF1Html(cachedNews?.data||[], cachedRace?.data||null);
   else container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
-  let items=[];
-  try { items=await fetchNewsQueued('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
-  if (items.length) { saveCache('mdF1Cache',items); container.innerHTML=buildF1Html(items); }
-  else if (!cached) container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`;
+
+  // Fetch race schedule and news in parallel
+  const [race, newsItems] = await Promise.all([
+    fetchNextF1Race(),
+    fetchNewsQueued('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15).catch(()=>[]),
+  ]);
+
+  if (race) saveCache('mdF1Race', race);
+  if (newsItems.length) saveCache('mdF1Cache', newsItems);
+
+  const finalRace = race || cachedRace?.data || null;
+  const finalNews = newsItems.length ? newsItems : (cachedNews?.data || []);
+  container.innerHTML = buildF1Html(finalNews, finalRace);
 }
 
 // ── Wish List ─────────────────────────────────────────────────────────────────
