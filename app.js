@@ -64,7 +64,7 @@ function buildEmptyState(msg, hint) { return `<div class="feed-empty"><strong>${
 
 function updateDateTime() {
   const now = new Date(), h = now.getHours();
-  document.getElementById('greeting').textContent = h<12?'Good Morning':h<17?'Good Afternoon':'Good Evening';
+  document.getElementById('greeting').textContent = h<12?'Good Morning, Bill':h<17?'Good Afternoon, Bill':'Good Evening, Bill';
   document.getElementById('datetime').textContent =
     now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) +
     ' · ' + now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
