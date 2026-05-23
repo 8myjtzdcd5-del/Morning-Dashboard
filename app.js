@@ -411,10 +411,14 @@ function renderMilestones() {
   }
   const thisYear = new Date().getFullYear();
   const enriched = milestones.map(m=>({...m,days:daysUntil(m.month,m.day)})).sort((a,b)=>a.days-b.days);
-  const toShow = enriched.filter(m=>m.days<=30).length > 0 ? enriched : enriched.slice(0,5);
+  const toShow = enriched.filter(m=>m.days<=7);
+  if (!toShow.length) {
+    el.innerHTML = '<p class="milestone-empty">No special dates in the next 7 days.</p>';
+    return;
+  }
   el.innerHTML = `<div class="milestone-list">${toShow.map(m=>{
     const today2=m.days===0, soon=m.days<=7&&m.days>1;
-    const when = today2?'&#x1F382; Today!':m.days===1?'Tomorrow':m.days<=30?`In ${m.days} days`:`${MONTH_SHORT[m.month-1]} ${m.day}`;
+    const when = today2?'&#x1F382; Today!':m.days===1?'Tomorrow':`In ${m.days} days`;
     const yrs = m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
     return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''}">
       <div><div class="milestone-title">${escHtml(m.title)}</div>${yrs?`<div class="milestone-years">${yrs}</div>`:''}</div>
