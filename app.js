@@ -26,6 +26,7 @@ const DEFAULTS = {
   people: [], topics: [], clients: [], prospects: [],
   tickers: [], wishlist: [],
   milestones: [],
+  refreshTimes: ['5:16 AM','11:30 AM','3:00 PM','7:30 PM'],
 };
 
 let settings = loadSettings();
@@ -596,19 +597,81 @@ function renderWishlist(items) {
 
 // ── Load all ──────────────────────────────────────────────────────────────────
 
-function loadAllFeeds() {
-  loadSection('news-feed', settings.newsTopics, 'news');
-  loadSection('people-feed', settings.people, 'person');
-  loadSection('topics-feed', settings.topics, 'topic');
-  loadContactSection('clients-feed', settings.clients, 'client', 'Open Settings to add your clients.');
-  loadContactSection('prospects-feed', settings.prospects, 'prospect', 'Open Settings to add your prospects.');
+function loadAllFeeds(staggerMs=0) {
+  // Fast, non-rate-limited sections always load immediately
   renderStocks(settings.tickers);
   renderWishlist(settings.wishlist);
   renderMilestones();
-  renderF1();
   renderQuote();
   renderMarketBar();
   renderWeather(settings.weatherCity);
+
+  // News sections — stagger over staggerMs if set (e.g. scheduled refresh)
+  const groups = [
+    ()=>loadSection('news-feed', settings.newsTopics, 'news'),
+    ()=>loadSection('people-feed', settings.people, 'person'),
+    ()=>loadSection('topics-feed', settings.topics, 'topic'),
+    ()=>loadContactSection('clients-feed', settings.clients, 'client', 'Open Settings to add your clients.'),
+    ()=>loadContactSection('prospects-feed', settings.prospects, 'prospect', 'Open Settings to add your prospects.'),
+    ()=>renderF1(),
+  ];
+  const n = groups.length;
+  groups.forEach((fn, i) => {
+    const delay = (staggerMs > 0 && n > 1) ? Math.round((i / (n - 1)) * staggerMs) : 0;
+    delay > 0 ? setTimeout(fn, delay) : fn();
+  });
+}
+
+// ── Auto-refresh scheduler ────────────────────────────────────────────────────
+
+let _refreshTimer = null;
+let _lastRefreshTs = 0;
+
+function parseRefreshTimes(list) {
+  return (list||[]).map(t=>{
+    const m = String(t).match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+    if (!m) return null;
+    let h=parseInt(m[1],10), min=m[2]?parseInt(m[2],10):0;
+    const ap=(m[3]||'').toLowerCase();
+    if (ap==='pm'&&h!==12) h+=12;
+    if (ap==='am'&&h===12) h=0;
+    if (h<0||h>23||min<0||min>59) return null;
+    return {h,min};
+  }).filter(Boolean);
+}
+
+function nextRefreshDate(times) {
+  if (!times.length) return null;
+  const now = new Date();
+  return times.map(({h,min})=>{
+    const d = new Date(now); d.setHours(h,min,0,0);
+    if (d <= now) d.setDate(d.getDate()+1);
+    return d;
+  }).sort((a,b)=>a-b)[0];
+}
+
+function updateNextRefreshLabel(date) {
+  const el = document.getElementById('next-refresh');
+  if (!el) return;
+  if (!date) { el.textContent=''; return; }
+  const timeStr = date.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  const sameDay = date.toDateString() === new Date().toDateString();
+  el.textContent = sameDay ? `Next refresh: ${timeStr}` : `Next refresh: ${timeStr} tomorrow`;
+}
+
+function scheduleAutoRefresh() {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer=null; }
+  const times = parseRefreshTimes(settings.refreshTimes||[]);
+  const next = nextRefreshDate(times);
+  updateNextRefreshLabel(next);
+  if (!next) return;
+  _refreshTimer = setTimeout(()=>{
+    if (Date.now()-_lastRefreshTs > 5*60*1000) {
+      _lastRefreshTs = Date.now();
+      loadAllFeeds(15*60*1000);
+    }
+    scheduleAutoRefresh();
+  }, next-Date.now());
 }
 
 // ── Settings modal ────────────────────────────────────────────────────────────
@@ -618,6 +681,7 @@ function closeSettings() { document.getElementById('overlay').classList.add('hid
 
 function syncSettingsUI() {
   document.getElementById('weather-city-input').value = settings.weatherCity;
+  document.getElementById('refresh-times-input').value = (settings.refreshTimes||[]).join(', ');
   renderTags('news-topics-tags', settings.newsTopics, 'newsTopics');
   renderTags('people-tags', settings.people, 'people');
   renderTags('topics-tags', settings.topics, 'topics');
@@ -776,7 +840,27 @@ function importSettings(file) {
 
 function init() {
   updateDateTime(); setInterval(updateDateTime,30000);
+  _lastRefreshTs = Date.now();
   loadAllFeeds();
+  scheduleAutoRefresh();
+
+  // If tab was hidden during a scheduled time, refresh when it becomes visible again
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.visibilityState !== 'visible') return;
+    const times = parseRefreshTimes(settings.refreshTimes||[]);
+    if (!times.length) return;
+    const now = new Date();
+    const pastTimes = times.map(({h,min})=>{
+      const d = new Date(now); d.setHours(h,min,0,0);
+      if (d > now) d.setDate(d.getDate()-1);
+      return d;
+    }).sort((a,b)=>b-a);
+    if (pastTimes[0] && _lastRefreshTs < pastTimes[0].getTime() && Date.now()-_lastRefreshTs > 5*60*1000) {
+      _lastRefreshTs = Date.now();
+      loadAllFeeds(15*60*1000);
+      scheduleAutoRefresh();
+    }
+  });
   document.getElementById('settings-btn').addEventListener('click',openSettings);
   document.getElementById('close-settings').addEventListener('click',closeSettings);
   document.getElementById('close-chart-btn').addEventListener('click',closeChart);
@@ -801,7 +885,9 @@ function init() {
 
   document.getElementById('apply-btn').addEventListener('click',()=>{
     const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v;
-    persistSettings(); closeSettings(); loadAllFeeds();
+    const rt=document.getElementById('refresh-times-input').value.trim();
+    settings.refreshTimes=rt?rt.split(',').map(s=>s.trim()).filter(Boolean):[];
+    persistSettings(); closeSettings(); loadAllFeeds(); scheduleAutoRefresh();
   });
 }
 
