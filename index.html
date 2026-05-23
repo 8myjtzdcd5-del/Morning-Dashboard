@@ -40,6 +40,21 @@
         <div id="topics-feed" class="feed-grid"></div>
       </section>
 
+      <section class="feed-section">
+        <h2 class="section-title">Client News</h2>
+        <div id="clients-feed" class="feed-grid"></div>
+      </section>
+
+      <section class="feed-section">
+        <h2 class="section-title">Prospect News</h2>
+        <div id="prospects-feed" class="feed-grid"></div>
+      </section>
+
+      <section class="feed-section">
+        <h2 class="section-title">Stock Prices</h2>
+        <div id="stocks-feed" class="stocks-grid"></div>
+      </section>
+
     </main>
 
     <div id="overlay" class="overlay hidden"></div>
@@ -87,6 +102,38 @@
             <button id="add-topic-btn" class="btn-primary">Add</button>
           </div>
           <div id="topics-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Clients</label>
+          <p class="setting-hint">Add a client's name and their company or organization</p>
+          <div class="contact-input-row">
+            <input type="text" id="client-name-input" placeholder="Name" autocomplete="off">
+            <input type="text" id="client-company-input" placeholder="Company / Organization" autocomplete="off">
+            <button id="add-client-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="clients-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Prospects</label>
+          <p class="setting-hint">Add a prospect's name and their company or organization</p>
+          <div class="contact-input-row">
+            <input type="text" id="prospect-name-input" placeholder="Name" autocomplete="off">
+            <input type="text" id="prospect-company-input" placeholder="Company / Organization" autocomplete="off">
+            <button id="add-prospect-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="prospects-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Stock Tickers</label>
+          <p class="setting-hint">Add stock symbols to track (e.g. AAPL, MSFT, TSLA)</p>
+          <div class="input-row">
+            <input type="text" id="stock-input" placeholder="e.g. AAPL" autocomplete="off" style="text-transform:uppercase">
+            <button id="add-stock-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="stocks-tags" class="tags"></div>
         </div>
 
       </div>
