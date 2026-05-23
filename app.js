@@ -140,12 +140,15 @@ async function renderMarketBar() {
     bar.innerHTML = results.map(q => {
       const meta = INDEX_META.find(m=>m.symbol===q.symbol); if (!meta) return '';
       const up = q.regularMarketChange >= 0;
-      return `<div class="market-item">
+      return `<div class="market-item market-clickable" data-symbol="${escHtml(q.symbol)}" data-name="${escHtml(meta.label)}" title="Click for chart">
         <span class="market-label">${meta.label}</span>
         <span class="market-price">${fmtIndexPrice(meta.fmt, q.regularMarketPrice)}</span>
         <span class="market-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${q.regularMarketChangePercent.toFixed(2)}%</span>
       </div>`;
     }).join('');
+    bar.querySelectorAll('.market-clickable').forEach(el =>
+      el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
+    );
   } catch { fallback(); }
 }
 
@@ -465,15 +468,19 @@ function renderStocks(tickers) {
       const extPrice = pre ? s.prePrice : post ? s.postPrice : null;
       const extPct   = pre ? s.preChangePct : post ? s.postChangePct : null;
       const extLabel = pre ? 'Pre-mkt' : 'After-hrs';
-      return `<div class="stock-card ${up?'up':'down'}">
+      return `<div class="stock-card ${up?'up':'down'} stock-clickable" data-symbol="${escHtml(s.symbol)}" data-name="${escHtml(s.name)}" title="Click for chart">
         <div class="stock-symbol">${escHtml(s.symbol)}</div>
         <div class="stock-name">${escHtml(s.name)}</div>
         <div class="stock-price">$${fmt(s.price)}</div>
         <div class="stock-change">${sign}${fmt(s.change)} (${sign}${fmt(s.changePct)}%)</div>
         ${closed&&dateStr ? `<div class="stock-time stock-closed">&#x25CF; Closed &mdash; last ${dateStr}</div>` : ''}
         ${extPrice!=null ? `<div class="stock-ext">${extLabel}: $${fmt(extPrice)} (${extPct>=0?'+':''}${fmt(extPct)}%)</div>` : ''}
+        <div class="stock-chart-hint">&#x1F4C8; View chart</div>
       </div>`;
     }).join('');
+    container.querySelectorAll('.stock-clickable').forEach(el =>
+      el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
+    );
   }).catch(()=>{ container.innerHTML=buildEmptyState('Stock data unavailable.','Markets may be closed or the service is down.'); });
 }
 
@@ -604,6 +611,64 @@ function wireContactAdd(btnId, nameId, companyId, tagsId, key) {
   [nameId,companyId].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if (e.key==='Enter') addContact(key,nameId,companyId,tagsId); }));
 }
 
+// ── Chart modal (TradingView) ─────────────────────────────────────────────────
+
+const TV_MAP = {
+  '^GSPC':'SP:SPX', '^DJI':'DJ:DJI', '^IXIC':'NASDAQ:IXIC',
+  '^VIX':'CBOE:VIX', '^TNX':'TVC:US10Y',
+};
+function toTvSymbol(sym) { return TV_MAP[sym] || sym; }
+
+let tvReady = false;
+function loadTvScript(cb) {
+  if (tvReady) { cb(); return; }
+  if (document.getElementById('tv-script')) {
+    document.getElementById('tv-script').addEventListener('load', cb);
+    return;
+  }
+  const s = document.createElement('script');
+  s.id = 'tv-script';
+  s.src = 'https://s3.tradingview.com/tv.js';
+  s.onload = () => { tvReady = true; cb(); };
+  document.head.appendChild(s);
+}
+
+let currentChartSymbol = null;
+
+function openChart(symbol, name) {
+  currentChartSymbol = toTvSymbol(symbol);
+  document.getElementById('chart-title').textContent = name;
+  document.getElementById('chart-modal').classList.remove('hidden');
+  document.getElementById('overlay').classList.remove('hidden');
+  document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b.dataset.range === '12M'));
+  renderTvChart(currentChartSymbol, '12M');
+}
+
+function closeChart() {
+  document.getElementById('chart-modal').classList.add('hidden');
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+function renderTvChart(symbol, range) {
+  const container = document.getElementById('chart-container');
+  container.innerHTML = '<div id="tv_widget"></div>';
+  loadTvScript(() => {
+    new TradingView.widget({
+      container_id: 'tv_widget',
+      symbol, range,
+      width: '100%',
+      height: 480,
+      theme: 'light',
+      style: '1',
+      locale: 'en',
+      enable_publishing: false,
+      hide_top_toolbar: false,
+      save_image: false,
+      hide_side_toolbar: false,
+    });
+  });
+}
+
 // ── Settings export / import ──────────────────────────────────────────────────
 
 function exportSettings() {
@@ -640,7 +705,13 @@ function init() {
   loadAllFeeds();
   document.getElementById('settings-btn').addEventListener('click',openSettings);
   document.getElementById('close-settings').addEventListener('click',closeSettings);
-  document.getElementById('overlay').addEventListener('click',closeSettings);
+  document.getElementById('close-chart-btn').addEventListener('click',closeChart);
+  document.getElementById('overlay').addEventListener('click',()=>{ closeSettings(); closeChart(); });
+  document.querySelectorAll('.range-btn').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.range-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTvChart(currentChartSymbol, btn.dataset.range);
+  }));
   document.getElementById('save-city-btn').addEventListener('click',()=>{ const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v; });
   wireAddButton('add-news-topic-btn','news-topic-input','news-topics-tags','newsTopics');
   wireAddButton('add-person-btn','person-input','people-tags','people');

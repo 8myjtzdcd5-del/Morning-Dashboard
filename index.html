@@ -216,6 +216,25 @@
     </div>
 
   </div>
+
+  <!-- Chart modal -->
+  <div id="chart-modal" class="modal chart-modal hidden">
+    <div class="modal-header">
+      <h2 id="chart-title">Chart</h2>
+      <button id="close-chart-btn" class="close-btn" aria-label="Close">&#x2715;</button>
+    </div>
+    <div class="chart-range-bar">
+      <button class="range-btn active" data-range="12M">12 Months</button>
+      <button class="range-btn" data-range="YTD">Year to Date</button>
+      <button class="range-btn" data-range="6M">6 Months</button>
+      <button class="range-btn" data-range="3M">Quarter to Date</button>
+      <button class="range-btn" data-range="1M">Month to Date</button>
+      <button class="range-btn" data-range="3Y">3 Years</button>
+      <button class="range-btn" data-range="5Y">5 Years</button>
+    </div>
+    <div id="chart-container" class="chart-container"></div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
