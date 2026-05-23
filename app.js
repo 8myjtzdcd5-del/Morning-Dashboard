@@ -342,6 +342,8 @@ function filterRecent(articles) {
 
 // ── News fetching ─────────────────────────────────────────────────────────────
 
+function stripHtml(s) { return (s||'').replace(/<[^>]*>/g,'').replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim(); }
+
 function parseXmlItems(xml, limit) {
   const doc = new DOMParser().parseFromString(xml, 'text/xml');
   const items = Array.from(doc.querySelectorAll('item')).slice(0, limit);
@@ -351,6 +353,7 @@ function parseXmlItems(xml, limit) {
     link:  item.querySelector('link')?.textContent?.trim()??'#',
     date:  item.querySelector('pubDate')?.textContent??'',
     source:item.querySelector('source')?.textContent??'',
+    description: stripHtml(item.querySelector('description')?.textContent??''),
   }));
 }
 
@@ -362,7 +365,7 @@ async function fetchNews(query, limit=8) {
     {signal: sig(8000)}
   ).then(r=>r.json()).then(data=>{
     if (data.status!=='ok'||!data.items?.length) throw new Error('rss2json empty');
-    return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||''}));
+    return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||'',description:stripHtml(i.description||'')}));
   });
   const viaProxy = proxyFetch(rssUrl, 8000).then(xml=>parseXmlItems(xml, limit));
   return Promise.any([viaRss2json, viaProxy]);
@@ -526,15 +529,28 @@ async function renderF1() {
   container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
   let items=[];
   try { items=await fetchNews('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
-  const fresh=items.filter(i=>i.date&&(Date.now()-new Date(i.date).getTime())<86400000);
-  const article=fresh[0]||items[0];
-  if (!article) { container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`; return; }
-  const isFresh=fresh.length>0;
-  const date=article.date?new Date(article.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const now=Date.now();
+  const fresh=items.filter(i=>i.date&&(now-new Date(i.date).getTime())<86400000);
+  const stories=(fresh.length>=2?fresh:items).slice(0,2);
+  if (!stories.length) { container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`; return; }
+  const hasFresh=fresh.length>0;
+  const staleNote=!hasFresh?'<p class="f1-stale">No updates in 24h &mdash; showing latest</p>':'';
+  const storiesHtml=stories.map(a=>{
+    const date=a.date?new Date(a.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const meta=[a.source?escHtml(a.source):'',date].filter(Boolean).join(' &bull; ');
+    // description: strip title dupe, cap at 180 chars
+    let desc=(a.description||'').replace(/<[^>]*>/g,'').trim();
+    if (desc.toLowerCase().startsWith(a.title.toLowerCase().slice(0,30))) desc='';
+    if (desc.length>180) desc=desc.slice(0,177)+'&hellip;';
+    return `<div class="f1-story">
+      <a class="f1-headline" href="${escHtml(a.link)}" target="_blank" rel="noopener noreferrer">${escHtml(a.title)}</a>
+      ${desc?`<p class="f1-desc">${escHtml(desc)}</p>`:''}
+      ${meta?`<div class="f1-meta">${meta}</div>`:''}
+    </div>`;
+  }).join('');
   container.innerHTML=`<div class="f1-card">
-    <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1 ${isFresh?'<span class="f1-fresh">&#x25CF; LIVE</span>':''}</div>
-    <a class="f1-headline" href="${escHtml(article.link)}" target="_blank" rel="noopener noreferrer">${escHtml(article.title)}</a>
-    <div class="f1-meta">${article.source?escHtml(article.source)+(date?' &bull; ':''):''}${date}${!isFresh?'<br><span class="f1-stale">No updates in 24h &mdash; showing latest</span>':''}</div>
+    <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1 ${hasFresh?'<span class="f1-fresh">&#x25CF; TODAY</span>':''}</div>
+    ${storiesHtml}${staleNote}
   </div>`;
 }
 

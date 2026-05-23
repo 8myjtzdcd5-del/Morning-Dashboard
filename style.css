@@ -353,6 +353,9 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .f1-headline:hover { color: #fca5a5; }
 .f1-meta { font-size: 0.68rem; color: rgba(255,255,255,0.42); border-top: 1px solid rgba(255,255,255,0.09); padding-top: 9px; }
 .f1-stale { font-size: 0.7rem; color: rgba(255,255,255,0.38); font-style: italic; }
+.f1-story { display: flex; flex-direction: column; gap: 5px; }
+.f1-story + .f1-story { border-top: 1px solid rgba(255,255,255,0.09); padding-top: 10px; }
+.f1-desc { margin: 0; font-size: 0.78rem; color: rgba(255,255,255,0.62); line-height: 1.5; }
 
 /* ── Stock grid ──────────────────────────────────────── */
 
