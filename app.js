@@ -170,7 +170,7 @@ function updateDateTime() {
 
 // ── CORS proxy (single fast attempt) ─────────────────────────────────────────
 
-async function proxyFetch(url, ms=8000) {
+async function proxyFetch(url, ms=15000) {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), ms);
   const s = ac.signal;
@@ -180,8 +180,10 @@ async function proxyFetch(url, ms=8000) {
     .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();});
   const codetabs  = fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,{signal:s})
     .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();});
+  const thingproxy = fetch(`https://thingproxy.freeboard.io/fetch/${url}`,{signal:s})
+    .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();});
   try {
-    const result = await Promise.any([allorigins, corsproxy, codetabs]);
+    const result = await Promise.any([allorigins, corsproxy, codetabs, thingproxy]);
     clearTimeout(timer); ac.abort();
     return result;
   } catch { clearTimeout(timer); throw new Error('all proxies failed'); }
@@ -469,15 +471,14 @@ function parseXmlItems(xml, limit) {
 
 async function fetchNews(query, limit=8) {
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-  // Race rss2json (no proxy) vs. parallel proxy race — first winner is used
   const viaRss2json = fetch(
     `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
-    {signal: sig(8000)}
+    {signal: sig(15000)}
   ).then(r=>r.json()).then(data=>{
     if (data.status!=='ok'||!data.items?.length) throw new Error('rss2json empty');
     return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||'',description:stripHtml(i.description||'')}));
   });
-  const viaProxy = proxyFetch(rssUrl, 8000).then(xml=>parseXmlItems(xml, limit));
+  const viaProxy = proxyFetch(rssUrl, 15000).then(xml=>parseXmlItems(xml, limit));
   return Promise.any([viaRss2json, viaProxy]);
 }
 
@@ -492,25 +493,32 @@ function buildNewsCard(label, items, id='') {
     `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>${body}</div>`;
 }
 
-// One request at a time — multiple concurrent fetches each fire 4 parallel proxy calls,
-// flooding rate limits. Sequential processing is slower but far more reliable.
+// One request at a time with a cooldown gap between items to let proxies recover.
 const newsQueue = (() => {
-  let running = 0;
+  let running = false;
+  let lastDone = 0;
+  const GAP = 1200; // ms between requests — prevents back-to-back proxy hammering
   const queue = [];
   function run() {
-    if (running > 0 || !queue.length) return;
-    const {fn, resolve, reject} = queue.shift();
-    running = 1;
-    fn().then(resolve, reject).finally(()=>{ running = 0; run(); });
+    if (running || !queue.length) return;
+    const wait = Math.max(0, lastDone + GAP - Date.now());
+    setTimeout(()=>{
+      if (!queue.length) return;
+      running = true;
+      const {fn, resolve, reject} = queue.shift();
+      fn().then(resolve, reject).finally(()=>{ lastDone=Date.now(); running=false; run(); });
+    }, wait);
   }
   return { add(fn) { return new Promise((res,rej)=>{ queue.push({fn,resolve:res,reject:rej}); run(); }); } };
 })();
 
 async function fetchNewsQueued(query, limit=8) {
   return newsQueue.add(async ()=>{
-    try { return await fetchNews(query, limit); } catch {}
-    await new Promise(r=>setTimeout(r, 2000));
-    return fetchNews(query, limit); // throws on second failure — caller handles it
+    for (let attempt=0; attempt<3; attempt++) {
+      try { return await fetchNews(query, limit); } catch {}
+      if (attempt < 2) await new Promise(r=>setTimeout(r, 2000 * (attempt+1)));
+    }
+    throw new Error('all attempts failed');
   });
 }
 
