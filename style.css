@@ -39,7 +39,7 @@ body {
 }
 
 .header-inner {
-  max-width: 1360px;
+  max-width: 1440px;
   margin: 0 auto;
   padding: 0 28px;
   display: flex;
@@ -70,60 +70,71 @@ h1 {
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
-  letter-spacing: 0.01em;
   transition: background 0.18s;
 }
 
 .settings-btn:hover { background: rgba(255,255,255,0.22); }
 
-/* ── Main layout ─────────────────────────────────────── */
+/* ── Main & dashboard rows ───────────────────────────── */
 
 .main {
-  max-width: 1360px;
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 28px 28px 60px;
+  padding: 24px 28px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 }
+
+.dash-row {
+  display: grid;
+  gap: 20px;
+  align-items: start;
+}
+
+.dash-row--top      { grid-template-columns: 2fr 1fr; }
+.dash-row--news     { grid-template-columns: repeat(3, 1fr); }
+.dash-row--contacts { grid-template-columns: 1fr 1fr; }
+.dash-row--full     { grid-template-columns: 1fr; }
 
 /* ── Weather ─────────────────────────────────────────── */
 
-.weather-section {
-  margin-bottom: 36px;
-}
+.weather-section { }
 
 .weather-card {
   background: linear-gradient(135deg, var(--header-from) 0%, var(--header-to) 100%);
   color: #fff;
   border-radius: var(--radius);
-  padding: 28px 36px;
+  padding: 24px 28px;
   display: flex;
-  align-items: center;
-  gap: 36px;
+  align-items: flex-start;
+  gap: 28px;
   box-shadow: var(--shadow-lg);
 }
 
-.weather-temp-block { line-height: 1; }
+.weather-temp-block { line-height: 1; flex-shrink: 0; }
 
 .weather-temp {
-  font-size: 3.8rem;
+  font-size: 3.4rem;
   font-weight: 700;
   letter-spacing: -0.03em;
 }
 
 .weather-temp-alt {
-  font-size: 1rem;
+  font-size: 0.95rem;
   opacity: 0.55;
   margin-top: 4px;
 }
 
-.weather-info { flex: 1; }
+.weather-info { flex: 1; min-width: 0; }
 
 .weather-desc {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   font-weight: 500;
 }
 
 .weather-location {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   opacity: 0.65;
   margin-top: 3px;
 }
@@ -131,65 +142,93 @@ h1 {
 .weather-details {
   display: flex;
   flex-wrap: wrap;
-  gap: 18px;
-  margin-top: 14px;
+  gap: 14px;
+  margin-top: 12px;
   font-size: 0.82rem;
   opacity: 0.72;
 }
 
 .weather-rain {
-  margin-top: 12px;
-  font-size: 0.85rem;
+  margin-top: 10px;
+  font-size: 0.84rem;
   background: rgba(255,255,255,0.13);
   border-radius: 8px;
-  padding: 8px 14px;
+  padding: 7px 12px;
   display: inline-block;
 }
 
 .weather-no-rain { opacity: 0.65; }
 
-.rain-period {
-  font-weight: 600;
-  white-space: nowrap;
+.rain-period { font-weight: 600; white-space: nowrap; }
+.rain-period em { font-style: normal; font-weight: 400; opacity: 0.8; }
+
+.weather-loading { color: var(--text-muted); font-size: 0.9rem; }
+.weather-error   { color: #ef4444; font-size: 0.9rem; }
+
+/* ── 5-day forecast ──────────────────────────────────── */
+
+.forecast-strip {
+  display: flex;
+  gap: 6px;
+  margin-top: 16px;
+  flex-wrap: wrap;
 }
 
-.rain-period em {
-  font-style: normal;
-  font-weight: 400;
-  opacity: 0.8;
+.forecast-day {
+  background: rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 9px 12px;
+  text-align: center;
+  min-width: 68px;
+  flex: 1;
 }
 
-.weather-loading {
-  color: var(--text-muted);
-  font-size: 0.9rem;
+.forecast-day-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.7;
 }
 
-.weather-error {
-  color: #ef4444;
-  font-size: 0.9rem;
+.forecast-day-desc {
+  font-size: 0.72rem;
+  margin: 3px 0 2px;
+  opacity: 0.85;
 }
 
-/* ── Feed sections ───────────────────────────────────── */
+.forecast-day-temps { font-size: 0.82rem; font-weight: 600; }
+.forecast-day-temps .lo { opacity: 0.6; font-weight: 400; margin-left: 3px; }
+.forecast-day-rain { font-size: 0.68rem; opacity: 0.65; margin-top: 2px; }
 
-.feed-section {
-  margin-bottom: 44px;
-}
+/* ── Section titles ──────────────────────────────────── */
+
+.feed-section { }
 
 .section-title {
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: 16px;
-  padding-bottom: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
   border-bottom: 2px solid var(--accent);
   display: inline-block;
   letter-spacing: 0.01em;
 }
 
+.section-sub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: -10px;
+  margin-bottom: 14px;
+}
+
+/* ── Feed grid ───────────────────────────────────────── */
+
 .feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
 }
 
 /* ── Feed card ───────────────────────────────────────── */
@@ -197,24 +236,21 @@ h1 {
 .feed-card {
   background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 18px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
 .feed-card-label {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--accent);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 
 .label-dot {
@@ -228,22 +264,18 @@ h1 {
 .news-list { list-style: none; }
 
 .news-item {
-  padding: 9px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--border);
 }
 
-.news-item:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
+.news-item:last-child { border-bottom: none; padding-bottom: 0; }
 .news-item:first-child { padding-top: 0; }
 
 .news-link {
   color: var(--text);
   text-decoration: none;
-  font-size: 0.875rem;
-  line-height: 1.45;
+  font-size: 0.85rem;
+  line-height: 1.4;
   display: block;
   transition: color 0.15s;
 }
@@ -251,18 +283,18 @@ h1 {
 .news-link:hover { color: var(--accent-dark); }
 
 .news-meta {
-  margin-top: 4px;
-  font-size: 0.72rem;
+  margin-top: 3px;
+  font-size: 0.7rem;
   color: var(--text-muted);
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 /* ── Loading / empty states ──────────────────────────── */
 
 .feed-loading {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   font-style: italic;
 }
 
@@ -280,17 +312,168 @@ h1 {
   font-size: 0.875rem;
   grid-column: 1 / -1;
   text-align: center;
-  padding: 28px 20px;
+  padding: 24px 20px;
   background: var(--card-bg);
   border-radius: var(--radius);
   border: 2px dashed var(--border);
 }
 
-.feed-empty strong {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--text);
+.feed-empty strong { display: block; margin-bottom: 4px; color: var(--text); }
+
+/* ── Contact card label ──────────────────────────────── */
+
+.contact-name {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
+
+.contact-company {
+  font-size: 0.7rem;
+  font-weight: 400;
+  opacity: 0.65;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 6px;
+}
+
+/* ── Card tabs (Recent / History) ────────────────────── */
+
+.card-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+.card-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  padding: 5px 10px 7px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.card-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.card-tab:hover:not(.active) { color: var(--text); }
+
+.tab-count {
+  background: var(--bg);
+  border-radius: 100px;
+  padding: 1px 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.card-tab.active .tab-count {
+  background: var(--accent-light);
+  color: var(--accent-dark);
+}
+
+/* ── Stock grid ──────────────────────────────────────── */
+
+.stocks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.stock-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+}
+
+.stock-card.up   { border-left-color: #16a34a; }
+.stock-card.down { border-left-color: #dc2626; }
+
+.stock-symbol { font-size: 0.95rem; font-weight: 700; letter-spacing: 0.03em; }
+
+.stock-name {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stock-price {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-top: 8px;
+  letter-spacing: -0.02em;
+}
+
+.stock-change { font-size: 0.8rem; font-weight: 600; margin-top: 2px; }
+.stock-card.up   .stock-change { color: #16a34a; }
+.stock-card.down .stock-change { color: #dc2626; }
+.stock-time { font-size: 0.65rem; color: var(--text-muted); margin-top: 5px; }
+
+/* ── Wish List ───────────────────────────────────────── */
+
+.wishlist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.wishlist-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.wishlist-item-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  flex: 1;
+  min-width: 140px;
+}
+
+.wishlist-links {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.shop-link {
+  display: inline-block;
+  padding: 5px 11px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.shop-link:hover { opacity: 0.82; }
+.shop-link.amazon  { background: #ff9900; color: #111; }
+.shop-link.google  { background: #4285f4; color: #fff; }
+.shop-link.ebay    { background: #e53238; color: #fff; }
+.shop-link.bestbuy { background: #003db2; color: #fff; }
 
 /* ── Modal ───────────────────────────────────────────── */
 
@@ -320,7 +503,7 @@ h1 {
 .hidden { display: none !important; }
 
 .modal-header {
-  padding: 22px 24px 18px;
+  padding: 20px 24px 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
@@ -328,10 +511,7 @@ h1 {
   flex-shrink: 0;
 }
 
-.modal-header h2 {
-  font-size: 1.15rem;
-  font-weight: 700;
-}
+.modal-header h2 { font-size: 1.1rem; font-weight: 700; }
 
 .close-btn {
   background: none;
@@ -347,41 +527,25 @@ h1 {
 
 .close-btn:hover { color: var(--text); background: var(--bg); }
 
-.modal-body {
-  padding: 20px 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
+.modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 24px; border-top: 1px solid var(--border); flex-shrink: 0; }
 
 /* ── Settings groups ─────────────────────────────────── */
 
-.setting-group { margin-bottom: 26px; }
+.setting-group { margin-bottom: 24px; }
 .setting-group:last-child { margin-bottom: 0; }
 
 .setting-label {
   display: block;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   margin-bottom: 4px;
   color: var(--text);
 }
 
-.setting-hint {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
+.setting-hint { font-size: 0.76rem; color: var(--text-muted); margin-bottom: 8px; }
 
-.input-row {
-  display: flex;
-  gap: 8px;
-}
+.input-row { display: flex; gap: 8px; }
 
 .input-row input {
   flex: 1;
@@ -397,69 +561,9 @@ h1 {
 
 .input-row input:focus { border-color: var(--accent); }
 
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 9px 18px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 600;
-  font-family: inherit;
-  white-space: nowrap;
-  transition: background 0.15s;
-}
-
-.btn-primary:hover { background: var(--accent-dark); }
-
-.btn-large {
-  width: 100%;
-  padding: 13px;
-  font-size: 0.95rem;
-}
-
-/* ── Tags ────────────────────────────────────────────── */
-
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-  min-height: 10px;
-}
-
-.tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  background: var(--accent-light);
-  color: var(--accent-dark);
-  border: 1px solid var(--accent-border);
-  border-radius: 100px;
-  padding: 4px 10px 4px 12px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.tag-remove {
-  cursor: pointer;
-  opacity: 0.5;
-  font-size: 0.85rem;
-  line-height: 1;
-  transition: opacity 0.15s;
-  user-select: none;
-}
-
-.tag-remove:hover { opacity: 1; }
-
 /* ── Contact input (two fields + button) ─────────────── */
 
-.contact-input-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.contact-input-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .contact-input-row input {
   flex: 1;
@@ -476,184 +580,61 @@ h1 {
 
 .contact-input-row input:focus { border-color: var(--accent); }
 
-/* ── Contact card label ──────────────────────────────── */
-
-.contact-name {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.contact-company {
-  font-size: 0.72rem;
-  font-weight: 400;
-  opacity: 0.65;
-  text-transform: none;
-  letter-spacing: 0;
-  margin-left: 6px;
-}
-
-/* ── Card tabs (Recent / History) ────────────────────── */
-
-.card-tabs {
-  display: flex;
-  gap: 2px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-  margin-top: 2px;
-}
-
-.card-tab {
-  background: none;
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
   border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  padding: 6px 12px 8px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.875rem;
   font-weight: 600;
   font-family: inherit;
-  color: var(--text-muted);
-  display: flex;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.btn-primary:hover { background: var(--accent-dark); }
+.btn-large { width: 100%; padding: 12px; font-size: 0.95rem; }
+
+/* ── Tags ────────────────────────────────────────────── */
+
+.tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-height: 10px; }
+
+.tag {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.card-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-
-.card-tab:hover:not(.active) { color: var(--text); }
-
-.tab-count {
-  background: var(--bg);
-  border-radius: 100px;
-  padding: 1px 6px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-.card-tab.active .tab-count {
+  gap: 7px;
   background: var(--accent-light);
   color: var(--accent-dark);
-}
-
-/* ── 5-day forecast strip ────────────────────────────── */
-
-.forecast-strip {
-  display: flex;
-  gap: 8px;
-  margin-top: 18px;
-  flex-wrap: wrap;
-}
-
-.forecast-day {
-  background: rgba(255,255,255,0.12);
-  border-radius: 10px;
-  padding: 10px 14px;
-  text-align: center;
-  min-width: 72px;
-  flex: 1;
-}
-
-.forecast-day-name {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  opacity: 0.7;
-}
-
-.forecast-day-desc {
+  border: 1px solid var(--accent-border);
+  border-radius: 100px;
+  padding: 4px 10px 4px 12px;
   font-size: 0.78rem;
-  margin: 4px 0 2px;
-  opacity: 0.9;
+  font-weight: 500;
 }
 
-.forecast-day-temps {
+.tag-remove {
+  cursor: pointer;
+  opacity: 0.5;
   font-size: 0.82rem;
-  font-weight: 600;
+  line-height: 1;
+  transition: opacity 0.15s;
+  user-select: none;
 }
 
-.forecast-day-temps .lo {
-  opacity: 0.6;
-  font-weight: 400;
-  margin-left: 4px;
-}
-
-.forecast-day-rain {
-  font-size: 0.7rem;
-  opacity: 0.65;
-  margin-top: 3px;
-}
-
-/* ── Stock grid ──────────────────────────────────────── */
-
-.stocks-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 12px;
-}
-
-.stock-card {
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  box-shadow: var(--shadow);
-  border: 1px solid var(--border);
-  border-left: 4px solid var(--border);
-}
-
-.stock-card.up   { border-left-color: #16a34a; }
-.stock-card.down { border-left-color: #dc2626; }
-
-.stock-symbol {
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-}
-
-.stock-name {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stock-price {
-  font-size: 1.4rem;
-  font-weight: 700;
-  margin-top: 10px;
-  letter-spacing: -0.02em;
-}
-
-.stock-change {
-  font-size: 0.82rem;
-  font-weight: 600;
-  margin-top: 3px;
-}
-
-.stock-card.up   .stock-change { color: #16a34a; }
-.stock-card.down .stock-change { color: #dc2626; }
-
-.stock-time {
-  font-size: 0.68rem;
-  color: var(--text-muted);
-  margin-top: 6px;
-}
+.tag-remove:hover { opacity: 1; }
 
 /* ── Responsive ──────────────────────────────────────── */
 
-@media (max-width: 600px) {
-  .header-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
-  .weather-card { flex-direction: column; align-items: flex-start; gap: 16px; padding: 22px 24px; }
-  .weather-temp { font-size: 3rem; }
-  .forecast-strip { gap: 6px; }
-  .forecast-day { min-width: 60px; padding: 8px 10px; }
+@media (max-width: 1100px) {
+  .dash-row--news { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 720px) {
+  .dash-row--top,
+  .dash-row--news,
+  .dash-row--contacts { grid-template-columns: 1fr; }
+  .weather-card { flex-direction: column; gap: 14px; }
+  .weather-temp { font-size: 2.8rem; }
 }

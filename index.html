@@ -21,39 +21,53 @@
 
     <main class="main">
 
-      <section class="weather-section">
-        <div id="weather-content" class="weather-loading">Loading weather&hellip;</div>
-      </section>
+      <!-- Row 1: Weather + Stocks -->
+      <div class="dash-row dash-row--top">
+        <section class="weather-section">
+          <div id="weather-content" class="weather-loading">Loading weather&hellip;</div>
+        </section>
+        <section class="feed-section">
+          <h2 class="section-title">Stock Prices</h2>
+          <div id="stocks-feed" class="stocks-grid"></div>
+        </section>
+      </div>
 
-      <section class="feed-section">
-        <h2 class="section-title">News Topics</h2>
-        <div id="news-feed" class="feed-grid"></div>
-      </section>
+      <!-- Row 2: News Topics | People | Topics -->
+      <div class="dash-row dash-row--news">
+        <section class="feed-section">
+          <h2 class="section-title">News Topics</h2>
+          <div id="news-feed" class="feed-grid"></div>
+        </section>
+        <section class="feed-section">
+          <h2 class="section-title">People of Interest</h2>
+          <div id="people-feed" class="feed-grid"></div>
+        </section>
+        <section class="feed-section">
+          <h2 class="section-title">Topics of Interest</h2>
+          <div id="topics-feed" class="feed-grid"></div>
+        </section>
+      </div>
 
-      <section class="feed-section">
-        <h2 class="section-title">People of Interest</h2>
-        <div id="people-feed" class="feed-grid"></div>
-      </section>
+      <!-- Row 3: Client News | Prospect News -->
+      <div class="dash-row dash-row--contacts">
+        <section class="feed-section">
+          <h2 class="section-title">Client News</h2>
+          <div id="clients-feed" class="feed-grid"></div>
+        </section>
+        <section class="feed-section">
+          <h2 class="section-title">Prospect News</h2>
+          <div id="prospects-feed" class="feed-grid"></div>
+        </section>
+      </div>
 
-      <section class="feed-section">
-        <h2 class="section-title">Topics of Interest</h2>
-        <div id="topics-feed" class="feed-grid"></div>
-      </section>
-
-      <section class="feed-section">
-        <h2 class="section-title">Client News</h2>
-        <div id="clients-feed" class="feed-grid"></div>
-      </section>
-
-      <section class="feed-section">
-        <h2 class="section-title">Prospect News</h2>
-        <div id="prospects-feed" class="feed-grid"></div>
-      </section>
-
-      <section class="feed-section">
-        <h2 class="section-title">Stock Prices</h2>
-        <div id="stocks-feed" class="stocks-grid"></div>
-      </section>
+      <!-- Row 4: Wish List -->
+      <div class="dash-row dash-row--full">
+        <section class="feed-section">
+          <h2 class="section-title">Wish List</h2>
+          <p class="section-sub">Click a store link to search for the current best price.</p>
+          <div id="wishlist-feed" class="wishlist-grid"></div>
+        </section>
+      </div>
 
     </main>
 
@@ -68,15 +82,16 @@
 
         <div class="setting-group">
           <label class="setting-label">Weather City</label>
+          <p class="setting-hint">City name (e.g. Wilmington DE) or a place name. Zip codes are not supported &mdash; use the city name instead.</p>
           <div class="input-row">
-            <input type="text" id="weather-city-input" placeholder="e.g. New York" autocomplete="off">
+            <input type="text" id="weather-city-input" placeholder="e.g. Wilmington DE" autocomplete="off">
             <button id="save-city-btn" class="btn-primary">Save</button>
           </div>
         </div>
 
         <div class="setting-group">
           <label class="setting-label">News Topics</label>
-          <p class="setting-hint">Broad categories you follow (e.g. Technology, Sports)</p>
+          <p class="setting-hint">Broad categories (e.g. Technology, Sports)</p>
           <div class="input-row">
             <input type="text" id="news-topic-input" placeholder="e.g. Technology" autocomplete="off">
             <button id="add-news-topic-btn" class="btn-primary">Add</button>
@@ -86,7 +101,7 @@
 
         <div class="setting-group">
           <label class="setting-label">People of Interest</label>
-          <p class="setting-hint">Specific people you want to track news about</p>
+          <p class="setting-hint">People you want to track news about</p>
           <div class="input-row">
             <input type="text" id="person-input" placeholder="e.g. Elon Musk" autocomplete="off">
             <button id="add-person-btn" class="btn-primary">Add</button>
@@ -106,7 +121,7 @@
 
         <div class="setting-group">
           <label class="setting-label">Clients</label>
-          <p class="setting-hint">Add a client's name and their company or organization</p>
+          <p class="setting-hint">Add a client&rsquo;s name and their company or organization</p>
           <div class="contact-input-row">
             <input type="text" id="client-name-input" placeholder="Name" autocomplete="off">
             <input type="text" id="client-company-input" placeholder="Company / Organization" autocomplete="off">
@@ -117,13 +132,23 @@
 
         <div class="setting-group">
           <label class="setting-label">Prospects</label>
-          <p class="setting-hint">Add a prospect's name and their company or organization</p>
+          <p class="setting-hint">Add a prospect&rsquo;s name and their company or organization</p>
           <div class="contact-input-row">
             <input type="text" id="prospect-name-input" placeholder="Name" autocomplete="off">
             <input type="text" id="prospect-company-input" placeholder="Company / Organization" autocomplete="off">
             <button id="add-prospect-btn" class="btn-primary">Add</button>
           </div>
           <div id="prospects-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Wish List</label>
+          <p class="setting-hint">Add items you want to buy &mdash; we&rsquo;ll link you straight to search results at major stores.</p>
+          <div class="input-row">
+            <input type="text" id="wishlist-input" placeholder="e.g. Sony WH-1000XM5 headphones" autocomplete="off">
+            <button id="add-wishlist-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="wishlist-tags" class="tags"></div>
         </div>
 
         <div class="setting-group">

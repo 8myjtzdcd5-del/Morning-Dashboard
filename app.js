@@ -3,8 +3,23 @@
 // ── Constants ────────────────────────────────────────────────────────────────
 
 const RECENT_DAYS = 14;
-const HISTORY_DAYS = 730; // 2 years
+const HISTORY_DAYS = 730;
 const HIST_PREFIX = 'mdHist_';
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// WMO weather codes → descriptions
+const WMO = {
+  0:'Clear sky', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
+  45:'Fog', 48:'Icy fog',
+  51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
+  61:'Light rain', 63:'Rain', 65:'Heavy rain',
+  66:'Freezing rain', 67:'Heavy freezing rain',
+  71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
+  80:'Light showers', 81:'Showers', 82:'Heavy showers',
+  85:'Snow showers', 86:'Heavy snow showers',
+  95:'Thunderstorm', 96:'Thunderstorm w/ hail', 99:'Severe thunderstorm',
+};
+const wmoDesc = code => WMO[code] ?? 'Unknown';
 
 // ── Default settings ─────────────────────────────────────────────────────────
 
@@ -13,9 +28,10 @@ const DEFAULTS = {
   newsTopics: ['Technology', 'Science', 'Business'],
   people: [],
   topics: [],
-  clients: [],    // [{name, company}]
-  prospects: [],  // [{name, company}]
+  clients: [],
+  prospects: [],
   tickers: [],
+  wishlist: [],
 };
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -47,6 +63,14 @@ function toCardId(prefix, label) {
   return `card-${prefix}-${label.replace(/[^a-z0-9]/gi, '-').toLowerCase()}`;
 }
 
+function isToday(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const n = new Date();
+  return d.getFullYear() === n.getFullYear() &&
+    d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+}
+
 function articleRow(item, showYear = false) {
   const opts = showYear
     ? { month: 'short', day: 'numeric', year: 'numeric' }
@@ -74,14 +98,37 @@ function updateDateTime() {
     ' · ' + now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
 
-// ── Weather ──────────────────────────────────────────────────────────────────
+// ── Weather (Open-Meteo — free, no API key) ───────────────────────────────────
 
-async function fetchWeather(city) {
-  const resp = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=j1`, {
+async function fetchWeather(location) {
+  // 1. Geocode the location name
+  const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`;
+  const geoResp = await fetch(geoUrl, { signal: AbortSignal.timeout(8000) });
+  if (!geoResp.ok) throw new Error('Geocoding failed');
+  const geoData = await geoResp.json();
+  const geo = geoData.results?.[0];
+  if (!geo) throw new Error(`Location not found`);
+
+  // 2. Fetch weather for those coordinates
+  const params = new URLSearchParams({
+    latitude: geo.latitude,
+    longitude: geo.longitude,
+    current: 'temperature_2m,relative_humidity_2m,wind_speed_10m,apparent_temperature,weather_code',
+    hourly: 'precipitation_probability',
+    daily: 'temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max',
+    temperature_unit: 'fahrenheit',
+    wind_speed_unit: 'mph',
+    timezone: 'auto',
+    forecast_days: '5',
+  });
+  const wxResp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {
     signal: AbortSignal.timeout(8000),
   });
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  return resp.json();
+  if (!wxResp.ok) throw new Error('Weather fetch failed');
+  const wx = await wxResp.json();
+
+  const displayName = [geo.name, geo.admin1, geo.country_code].filter(Boolean).join(', ');
+  return { wx, displayName };
 }
 
 function fmtHour(h) {
@@ -91,81 +138,83 @@ function fmtHour(h) {
   return `${h - 12} PM`;
 }
 
-function buildRainHtml(today) {
+function buildRainHtml(hourly) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const nowHour = new Date().getHours();
   const THRESHOLD = 30;
-  const groups = [];
-  let current = null;
 
-  (today.hourly || []).forEach(h => {
-    const chance = parseInt(h.chanceofrain, 10);
-    const startH = Math.floor(parseInt(h.time, 10) / 100);
-    const endH = startH + 3;
-    if (chance >= THRESHOLD) {
-      if (current && current.endH === startH) {
-        current.endH = endH;
-        current.maxChance = Math.max(current.maxChance, chance);
+  const slots = hourly.time
+    .map((t, i) => ({
+      hour: parseInt(t.slice(11, 13), 10),
+      prob: hourly.precipitation_probability[i],
+      date: t.slice(0, 10),
+    }))
+    .filter(s => s.date === todayStr && s.hour >= nowHour);
+
+  const groups = [];
+  let cur = null;
+  slots.forEach(s => {
+    if (s.prob >= THRESHOLD) {
+      if (cur && cur.endH === s.hour) {
+        cur.endH = s.hour + 1;
+        cur.maxProb = Math.max(cur.maxProb, s.prob);
       } else {
-        current = { startH, endH, maxChance: chance };
-        groups.push(current);
+        cur = { startH: s.hour, endH: s.hour + 1, maxProb: s.prob };
+        groups.push(cur);
       }
     } else {
-      current = null;
+      cur = null;
     }
   });
 
-  if (groups.length === 0) {
-    return `<div class="weather-rain weather-no-rain">&#9728;&#xFE0F; No rain expected today</div>`;
-  }
+  if (!groups.length) return `<div class="weather-rain weather-no-rain">&#9728;&#xFE0F; No rain expected today</div>`;
   const spans = groups.map(g =>
-    `<span class="rain-period">${fmtHour(g.startH)}&ndash;${fmtHour(g.endH)} <em>(${g.maxChance}%)</em></span>`
+    `<span class="rain-period">${fmtHour(g.startH)}&ndash;${fmtHour(g.endH)} <em>(${g.maxProb}%)</em></span>`
   ).join(' &amp; ');
   return `<div class="weather-rain">&#x1F327;&#xFE0F; Rain today: ${spans}</div>`;
 }
 
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function buildForecastStrip(days) {
-  return `<div class="forecast-strip">${days.map((day, i) => {
-    const d = new Date(day.date + 'T12:00:00');
+function buildForecastStrip(daily) {
+  return `<div class="forecast-strip">${daily.time.slice(0, 5).map((dateStr, i) => {
+    const d = new Date(dateStr + 'T12:00:00');
     const name = i === 0 ? 'Today' : DAY_NAMES[d.getDay()];
-    const desc = day.weatherDesc[0].value;
-    const maxRain = Math.max(...(day.hourly || []).map(h => parseInt(h.chanceofrain, 10) || 0));
+    const maxRain = daily.precipitation_probability_max[i] || 0;
     return `
       <div class="forecast-day">
         <div class="forecast-day-name">${name}</div>
-        <div class="forecast-day-desc">${desc}</div>
-        <div class="forecast-day-temps">${day.maxtempF}&deg;<span class="lo">${day.mintempF}&deg;</span></div>
+        <div class="forecast-day-desc">${wmoDesc(daily.weather_code[i])}</div>
+        <div class="forecast-day-temps">${Math.round(daily.temperature_2m_max[i])}&deg;<span class="lo">${Math.round(daily.temperature_2m_min[i])}&deg;</span></div>
         ${maxRain >= 20 ? `<div class="forecast-day-rain">&#x1F327; ${maxRain}%</div>` : ''}
       </div>`;
   }).join('')}</div>`;
 }
 
-function renderWeather(city) {
+function renderWeather(location) {
   const el = document.getElementById('weather-content');
   el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
-  fetchWeather(city).then(data => {
-    const cur = data.current_condition[0];
-    const area = data.nearest_area[0];
+  fetchWeather(location).then(({ wx, displayName }) => {
+    const cur = wx.current;
+    const tempC = Math.round((cur.temperature_2m - 32) * 5 / 9);
     el.innerHTML = `
       <div class="weather-card">
         <div class="weather-temp-block">
-          <div class="weather-temp">${cur.temp_F}&deg;F</div>
-          <div class="weather-temp-alt">${cur.temp_C}&deg;C</div>
+          <div class="weather-temp">${Math.round(cur.temperature_2m)}&deg;F</div>
+          <div class="weather-temp-alt">${tempC}&deg;C</div>
         </div>
         <div class="weather-info">
-          <div class="weather-desc">${cur.weatherDesc[0].value}</div>
-          <div class="weather-location">${area.areaName[0].value}, ${area.country[0].value}</div>
+          <div class="weather-desc">${wmoDesc(cur.weather_code)}</div>
+          <div class="weather-location">${escHtml(displayName)}</div>
           <div class="weather-details">
-            <span>&#128167; ${cur.humidity}% humidity</span>
-            <span>&#128168; ${cur.windspeedMiles} mph wind</span>
-            <span>Feels like ${cur.FeelsLikeF}&deg;F</span>
+            <span>&#128167; ${cur.relative_humidity_2m}% humidity</span>
+            <span>&#128168; ${Math.round(cur.wind_speed_10m)} mph wind</span>
+            <span>Feels like ${Math.round(cur.apparent_temperature)}&deg;F</span>
           </div>
-          ${buildRainHtml(data.weather[0])}
-          ${buildForecastStrip(data.weather)}
+          ${buildRainHtml(wx.hourly)}
+          ${buildForecastStrip(wx.daily)}
         </div>
       </div>`;
   }).catch(() => {
-    el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(city)}&rdquo;. Check the city name in Settings.</span>`;
+    el.innerHTML = `<span class="weather-error">Could not find &ldquo;${escHtml(location)}&rdquo;. Try a city name like &ldquo;Wilmington DE&rdquo; or &ldquo;Wilmington, Delaware&rdquo;.</span>`;
   });
 }
 
@@ -184,24 +233,20 @@ function getHistory(key) {
 function mergeHistory(key, freshArticles) {
   const existing = getHistory(key);
   const seenLinks = new Set(existing.map(a => a.link));
-
   const merged = [
     ...freshArticles
       .filter(a => a.link && !seenLinks.has(a.link))
       .map(a => ({ ...a, _saved: Date.now() })),
     ...existing,
   ];
-
   const cutoffMs = Date.now() - HISTORY_DAYS * 86400000;
   const pruned = merged.filter(a => {
     const t = a.date ? new Date(a.date).getTime() : (a._saved || 0);
     return t > cutoffMs;
   });
-
   pruned.sort((a, b) =>
     new Date(b.date || b._saved || 0) - new Date(a.date || a._saved || 0)
   );
-
   localStorage.setItem(key, JSON.stringify(pruned));
   return pruned;
 }
@@ -222,25 +267,16 @@ async function fetchNews(query, limit = 8) {
   const doc = new DOMParser().parseFromString(contents, 'text/xml');
   return Array.from(doc.querySelectorAll('item')).slice(0, limit).map(item => ({
     title: item.querySelector('title')?.textContent ?? '',
-    link: item.querySelector('link')?.textContent?.trim() ?? '#',
-    date: item.querySelector('pubDate')?.textContent ?? '',
+    link:  item.querySelector('link')?.textContent?.trim() ?? '#',
+    date:  item.querySelector('pubDate')?.textContent ?? '',
     source: item.querySelector('source')?.textContent ?? '',
   }));
 }
 
-// ── Generic feed (topics, people, news) ──────────────────────────────────────
+// ── Generic feed cards ────────────────────────────────────────────────────────
 
 function buildEmptyState(message, hint) {
   return `<div class="feed-empty"><strong>${message}</strong> ${hint}</div>`;
-}
-
-function isToday(dateStr) {
-  if (!dateStr) return false;
-  const d = new Date(dateStr);
-  const now = new Date();
-  return d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
 }
 
 function buildNewsCard(label, items) {
@@ -306,8 +342,7 @@ function buildContactCard(entity, allArticles) {
         <span class="label-dot"></span>
         <span class="contact-name">${escHtml(entity.name || entity.company)}</span>
         ${entity.name && entity.company
-          ? `<span class="contact-company">${escHtml(entity.company)}</span>`
-          : ''}
+          ? `<span class="contact-company">${escHtml(entity.company)}</span>` : ''}
       </div>
       <div class="card-tabs">
         <button class="card-tab active" data-panel="recent">
@@ -338,12 +373,10 @@ function wireTabSwitching(container) {
 
 function loadContactSection(containerId, entities, prefix, emptyHint) {
   const container = document.getElementById(containerId);
-
   if (entities.length === 0) {
     container.innerHTML = buildEmptyState('Nobody added yet.', emptyHint);
     return;
   }
-
   container.innerHTML = entities.map(entity => {
     const id = toCardId(prefix, entity.name + entity.company);
     return `
@@ -352,18 +385,14 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
         <p class="feed-loading">Loading&hellip;</p>
       </div>`;
   }).join('');
-
   wireTabSwitching(container);
 
   entities.forEach(async entity => {
     const key = histKey(entity.name, entity.company);
     const cardId = toCardId(prefix, entity.name + entity.company);
-    const query = [entity.name, entity.company]
-      .filter(Boolean).map(s => `"${s}"`).join(' OR ');
-
+    const query = [entity.name, entity.company].filter(Boolean).map(s => `"${s}"`).join(' OR ');
     let fresh = [];
     try { fresh = await fetchNews(query, 20); } catch {}
-
     const allArticles = mergeHistory(key, fresh);
     const placeholder = document.getElementById(cardId);
     if (placeholder) {
@@ -374,7 +403,7 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
   });
 }
 
-// ── Stocks (Yahoo Finance via CORS proxy) ─────────────────────────────────────
+// ── Stocks ────────────────────────────────────────────────────────────────────
 
 async function fetchStocks(symbols) {
   if (!symbols.length) return [];
@@ -426,15 +455,41 @@ function renderStocks(tickers) {
   });
 }
 
+// ── Wish List ─────────────────────────────────────────────────────────────────
+
+function buildWishlistCard(item) {
+  const q = encodeURIComponent(item);
+  return `
+    <div class="wishlist-card">
+      <div class="wishlist-item-name">${escHtml(item)}</div>
+      <div class="wishlist-links">
+        <a class="shop-link amazon"  href="https://www.amazon.com/s?k=${q}" target="_blank" rel="noopener">Amazon</a>
+        <a class="shop-link google"  href="https://shopping.google.com/search?q=${q}" target="_blank" rel="noopener">Google</a>
+        <a class="shop-link ebay"    href="https://www.ebay.com/sch/i.html?_nkw=${q}" target="_blank" rel="noopener">eBay</a>
+        <a class="shop-link bestbuy" href="https://www.bestbuy.com/site/searchpage.jsp?st=${q}" target="_blank" rel="noopener">Best Buy</a>
+      </div>
+    </div>`;
+}
+
+function renderWishlist(items) {
+  const container = document.getElementById('wishlist-feed');
+  if (!items.length) {
+    container.innerHTML = buildEmptyState('No items yet.', 'Open Settings to add something to your wish list.');
+    return;
+  }
+  container.innerHTML = items.map(buildWishlistCard).join('');
+}
+
+// ── Load everything ───────────────────────────────────────────────────────────
+
 function loadAllFeeds() {
   loadSection('news-feed', settings.newsTopics, 'news');
   loadSection('people-feed', settings.people, 'person');
   loadSection('topics-feed', settings.topics, 'topic');
-  loadContactSection('clients-feed', settings.clients, 'client',
-    'Open Settings to add your clients.');
-  loadContactSection('prospects-feed', settings.prospects, 'prospect',
-    'Open Settings to add your prospects.');
+  loadContactSection('clients-feed', settings.clients, 'client', 'Open Settings to add your clients.');
+  loadContactSection('prospects-feed', settings.prospects, 'prospect', 'Open Settings to add your prospects.');
   renderStocks(settings.tickers);
+  renderWishlist(settings.wishlist);
 }
 
 // ── Settings modal ────────────────────────────────────────────────────────────
@@ -458,6 +513,7 @@ function syncSettingsUI() {
   renderContactTags('clients-tags', settings.clients, 'clients');
   renderContactTags('prospects-tags', settings.prospects, 'prospects');
   renderTags('stocks-tags', settings.tickers, 'tickers');
+  renderTags('wishlist-tags', settings.wishlist, 'wishlist');
 }
 
 function renderTags(containerId, list, key) {
@@ -551,9 +607,10 @@ function init() {
   wireAddButton('add-news-topic-btn', 'news-topic-input', 'news-topics-tags', 'newsTopics');
   wireAddButton('add-person-btn', 'person-input', 'people-tags', 'people');
   wireAddButton('add-topic-btn', 'topic-input', 'topics-tags', 'topics');
+  wireAddButton('add-stock-btn', 'stock-input', 'stocks-tags', 'tickers');
+  wireAddButton('add-wishlist-btn', 'wishlist-input', 'wishlist-tags', 'wishlist');
   wireContactAdd('add-client-btn', 'client-name-input', 'client-company-input', 'clients-tags', 'clients');
   wireContactAdd('add-prospect-btn', 'prospect-name-input', 'prospect-company-input', 'prospects-tags', 'prospects');
-  wireAddButton('add-stock-btn', 'stock-input', 'stocks-tags', 'tickers');
 
   document.getElementById('apply-btn').addEventListener('click', () => {
     const cityVal = document.getElementById('weather-city-input').value.trim();
