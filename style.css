@@ -33,7 +33,7 @@ body {
 .header {
   background: linear-gradient(135deg, var(--header-from) 0%, var(--header-to) 100%);
   color: #fff;
-  padding: 24px 0 20px;
+  padding: 20px 0;
 }
 
 .header-inner {
@@ -43,8 +43,31 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
+  gap: 24px;
 }
+
+/* Weather embedded in header */
+.header-weather {
+  flex: 1;
+  min-width: 0;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.88rem;
+}
+.header-weather .weather-card {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0 28px;
+  border-left: 1px solid rgba(255,255,255,0.16);
+  border-right: 1px solid rgba(255,255,255,0.16);
+}
+.header-weather .weather-temp { font-size: 2.4rem; }
+.header-weather .weather-temp-alt { display: none; }
+.header-weather .forecast-day {
+  background: rgba(255,255,255,0.1);
+  min-width: 54px;
+}
+.header-weather .forecast-strip { flex-wrap: nowrap; overflow-x: auto; }
 
 h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0.02em; }
 .datetime { margin-top: 3px; font-size: 0.9rem; opacity: 0.7; }
@@ -539,9 +562,10 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 /* ── Responsive ──────────────────────────────────────── */
 
 @media (max-width: 860px) {
-  .dash-row--top, .dash-row--brief { grid-template-columns: 1fr; }
+  .dash-row--brief { grid-template-columns: 1fr; }
   .dash-row--news-sub { grid-template-columns: 1fr 1fr; }
   .dash-row--contacts-wide { grid-template-columns: 1fr; }
+  .header-weather .weather-card { padding: 0 20px; }
 }
 
 @media (max-width: 600px) {
@@ -550,5 +574,8 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
   .weather-temp { font-size: 2.8rem; }
   .market-inner { padding: 8px 16px; }
   .main { padding: 16px 16px 40px; }
-  .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .header-inner { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .header-weather { flex: 1 1 100%; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 14px; margin-top: 2px; }
+  .header-weather .weather-card { padding: 0; border-left: none; border-right: none; }
+  .settings-btn { order: -1; align-self: flex-start; }
 }

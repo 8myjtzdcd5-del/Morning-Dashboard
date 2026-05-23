@@ -16,6 +16,7 @@
           <p id="datetime" class="datetime"></p>
           <p id="next-refresh" class="next-refresh"></p>
         </div>
+        <div id="weather-content" class="header-weather">Loading weather&hellip;</div>
         <button id="settings-btn" class="settings-btn">&#9881; Settings</button>
       </div>
     </header>
@@ -29,11 +30,8 @@
 
     <main class="main">
 
-      <!-- Row 1: Weather + Stocks -->
-      <div class="dash-row dash-row--top">
-        <section class="weather-section">
-          <div id="weather-content" class="weather-loading">Loading weather&hellip;</div>
-        </section>
+      <!-- Row 1: Stocks (weather moved to header) -->
+      <div class="dash-row dash-row--full">
         <section class="feed-section">
           <h2 class="section-title">Stock Prices</h2>
           <div id="stocks-feed" class="stocks-grid"></div>
