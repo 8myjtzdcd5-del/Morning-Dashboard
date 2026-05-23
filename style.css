@@ -451,6 +451,11 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 }
 .btn-secondary:hover { background: var(--bg); }
 .import-status { font-size: 0.78rem; color: var(--accent); }
+.sync-status { font-size: 0.78rem; min-height: 1.2em; margin-top: 5px; }
+.sync-ok      { color: #16a34a; }
+.sync-pending { color: #b45309; }
+.sync-error   { color: #dc2626; }
+.setting-hint a { color: var(--accent); }
 
 /* ── Settings groups ─────────────────────────────────── */
 

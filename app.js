@@ -34,7 +34,104 @@ function loadSettings() {
   try { const r = localStorage.getItem('morningDashboard'); return r ? {...DEFAULTS,...JSON.parse(r)} : {...DEFAULTS}; }
   catch { return {...DEFAULTS}; }
 }
-function persistSettings() { localStorage.setItem('morningDashboard', JSON.stringify(settings)); }
+function persistSettingsLocal() {
+  try { localStorage.setItem('morningDashboard', JSON.stringify(settings)); } catch {}
+}
+function persistSettings() {
+  persistSettingsLocal();
+  debouncedSyncToGist();
+}
+
+// ── Gist sync ─────────────────────────────────────────────────────────────────
+
+let _gistToken = localStorage.getItem('mdGistToken') || '';
+let _gistId    = localStorage.getItem('mdGistId')    || '';
+let _syncTimer = null;
+
+function setSyncStatus(state, extra) {
+  const el = document.getElementById('sync-status'); if (!el) return;
+  const map = {
+    connecting: ['sync-pending', '↻ Connecting…'],
+    syncing:    ['sync-pending', '↻ Syncing…'],
+    ok:         ['sync-ok',     '✓ Synced'],
+    loaded:     ['sync-ok',     '✓ Connected — settings loaded from cloud'],
+    created:    ['sync-ok',     '✓ Connected — settings saved to cloud'],
+    error:      ['sync-error',  '⚠ ' + (extra || 'Check your token and try again.')],
+  };
+  const [cls, text] = map[state] || ['', state];
+  el.className = 'sync-status ' + cls; el.textContent = text;
+}
+
+async function gistApi(path, method='GET', body=null) {
+  const opts = {method, headers:{'Authorization':`token ${_gistToken}`,'Accept':'application/vnd.github.v3+json'}, signal:sig(10000)};
+  if (body) { opts.body=JSON.stringify(body); opts.headers['Content-Type']='application/json'; }
+  const r = await fetch(`https://api.github.com${path}`, opts);
+  if (!r.ok) throw new Error(`GitHub API error ${r.status}`);
+  return r.json();
+}
+
+async function connectGist(token) {
+  _gistToken = token; localStorage.setItem('mdGistToken', token);
+  _gistId = ''; localStorage.removeItem('mdGistId');
+  setSyncStatus('connecting');
+  try {
+    const list = await gistApi('/gists?per_page=100');
+    const found = list.find(g => g.description === 'Morning Dashboard Settings');
+    if (found) {
+      _gistId = found.id; localStorage.setItem('mdGistId', _gistId);
+      const g = await gistApi(`/gists/${_gistId}`);
+      const raw = g.files?.['settings.json']?.content;
+      if (raw) {
+        settings = {...DEFAULTS, ...JSON.parse(raw)};
+        persistSettingsLocal(); syncSettingsUI(); loadAllFeeds(); scheduleAutoRefresh();
+        setSyncStatus('loaded'); return;
+      }
+    }
+    // No existing gist — create one with current settings
+    const created = await gistApi('/gists', 'POST', {
+      description: 'Morning Dashboard Settings', public: false,
+      files: {'settings.json': {content: JSON.stringify(settings, null, 2)}},
+    });
+    _gistId = created.id; localStorage.setItem('mdGistId', _gistId);
+    setSyncStatus('created');
+  } catch(e) { setSyncStatus('error', e.message); }
+}
+
+async function syncFromGist() {
+  if (!_gistToken || !_gistId) return false;
+  try {
+    const g = await gistApi(`/gists/${_gistId}`);
+    const raw = g.files?.['settings.json']?.content; if (!raw) return false;
+    const before = JSON.stringify(settings);
+    settings = {...DEFAULTS, ...JSON.parse(raw)};
+    persistSettingsLocal();
+    return JSON.stringify(settings) !== before;
+  } catch { return false; }
+}
+
+async function syncToGist() {
+  if (!_gistToken) return;
+  const content = JSON.stringify(settings, null, 2);
+  setSyncStatus('syncing');
+  try {
+    if (_gistId) {
+      await gistApi(`/gists/${_gistId}`, 'PATCH', {files: {'settings.json': {content}}});
+    } else {
+      const created = await gistApi('/gists', 'POST', {
+        description: 'Morning Dashboard Settings', public: false,
+        files: {'settings.json': {content}},
+      });
+      _gistId = created.id; localStorage.setItem('mdGistId', _gistId);
+    }
+    setSyncStatus('ok');
+  } catch(e) { setSyncStatus('error', e.message); }
+}
+
+function debouncedSyncToGist() {
+  if (!_gistToken) return;
+  clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(syncToGist, 1500);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -682,6 +779,8 @@ function closeSettings() { document.getElementById('overlay').classList.add('hid
 function syncSettingsUI() {
   document.getElementById('weather-city-input').value = settings.weatherCity;
   document.getElementById('refresh-times-input').value = (settings.refreshTimes||[]).join(', ');
+  document.getElementById('gist-token-input').value = _gistToken;
+  setSyncStatus(_gistToken && _gistId ? 'ok' : '');
   renderTags('news-topics-tags', settings.newsTopics, 'newsTopics');
   renderTags('people-tags', settings.people, 'people');
   renderTags('topics-tags', settings.topics, 'topics');
@@ -882,6 +981,17 @@ function init() {
   ['ms-title','ms-month','ms-day','ms-year'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addMilestone(); }));
   document.getElementById('export-settings-btn').addEventListener('click', exportSettings);
   document.getElementById('import-settings-input').addEventListener('change', e => importSettings(e.target.files[0]));
+  document.getElementById('connect-gist-btn').addEventListener('click', () => {
+    const token = document.getElementById('gist-token-input').value.trim();
+    if (token) connectGist(token);
+  });
+
+  // On startup, silently pull latest settings from gist if already connected
+  if (_gistToken && _gistId) {
+    syncFromGist().then(changed => {
+      if (changed) { syncSettingsUI(); loadAllFeeds(); scheduleAutoRefresh(); }
+    }).catch(()=>{});
+  }
 
   document.getElementById('apply-btn').addEventListener('click',()=>{
     const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v;

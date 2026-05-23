@@ -103,6 +103,16 @@
       <div class="modal-body">
 
         <div class="setting-group">
+          <label class="setting-label">&#x2601; Cloud Sync</label>
+          <p class="setting-hint">Sync settings across all your devices automatically. Paste a GitHub Personal Access Token with <strong>gist</strong> scope — create one at <a href="https://github.com/settings/tokens/new?scopes=gist&description=Morning+Dashboard+Sync" target="_blank" rel="noopener">github.com/settings/tokens</a>. Your token is stored only on this device; your settings are saved as a private Gist.</p>
+          <div class="input-row">
+            <input type="password" id="gist-token-input" placeholder="ghp_&hellip;" autocomplete="off">
+            <button id="connect-gist-btn" class="btn-primary">Connect</button>
+          </div>
+          <p id="sync-status" class="sync-status"></p>
+        </div>
+
+        <div class="setting-group">
           <label class="setting-label">Weather City</label>
           <p class="setting-hint">Use a city name like &ldquo;Wilmington DE&rdquo; or &ldquo;Wilmington, Delaware&rdquo;. Zip codes are not supported.</p>
           <div class="input-row">
