@@ -205,6 +205,12 @@
 
       </div>
       <div class="modal-footer">
+        <div class="settings-io">
+          <button id="export-settings-btn" class="btn-secondary">&#8681; Export Settings</button>
+          <label class="btn-secondary" for="import-settings-input">&#8679; Import Settings</label>
+          <input type="file" id="import-settings-input" accept=".json" style="display:none">
+          <span id="import-status" class="import-status"></span>
+        </div>
         <button id="apply-btn" class="btn-primary btn-large">Apply &amp; Refresh</button>
       </div>
     </div>

@@ -72,12 +72,21 @@ function updateDateTime() {
 
 // ── CORS proxy (single fast attempt) ─────────────────────────────────────────
 
-async function proxyFetch(url, ms=7000) {
-  const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, {signal:sig(ms)});
-  if (!r.ok) throw new Error('proxy failed');
-  const data = await r.json();
-  if (!data.contents) throw new Error('empty proxy response');
-  return data.contents;
+async function proxyFetch(url, ms=8000) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), ms);
+  const s = ac.signal;
+  const allorigins = fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,{signal:s})
+    .then(r=>r.json()).then(d=>{if(!d?.contents)throw new Error('empty');return d.contents;});
+  const corsproxy = fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`,{signal:s})
+    .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();});
+  const codetabs  = fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,{signal:s})
+    .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();});
+  try {
+    const result = await Promise.any([allorigins, corsproxy, codetabs]);
+    clearTimeout(timer); ac.abort();
+    return result;
+  } catch { clearTimeout(timer); throw new Error('all proxies failed'); }
 }
 
 // ── Market indices bar ────────────────────────────────────────────────────────
@@ -281,30 +290,32 @@ function filterRecent(articles) {
   return articles.filter(a=>a.date&&new Date(a.date).getTime()>cutoff);
 }
 
-// ── News fetching (rss2json — no proxy needed) ────────────────────────────────
+// ── News fetching ─────────────────────────────────────────────────────────────
 
-async function fetchNews(query, limit=8) {
-  const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-  try {
-    // rss2json has native CORS support — no proxy needed
-    const resp = await fetch(
-      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
-      {signal: sig(8000)}
-    );
-    const data = await resp.json();
-    if (data.status==='ok' && data.items?.length) {
-      return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||''}));
-    }
-  } catch {}
-  // Fallback: allorigins proxy → raw RSS XML
-  const xml = await proxyFetch(rssUrl, 7000);
-  const doc = new DOMParser().parseFromString(xml,'text/xml');
-  return Array.from(doc.querySelectorAll('item')).slice(0,limit).map(item=>({
+function parseXmlItems(xml, limit) {
+  const doc = new DOMParser().parseFromString(xml, 'text/xml');
+  const items = Array.from(doc.querySelectorAll('item')).slice(0, limit);
+  if (!items.length) throw new Error('no items');
+  return items.map(item=>({
     title: item.querySelector('title')?.textContent??'',
     link:  item.querySelector('link')?.textContent?.trim()??'#',
     date:  item.querySelector('pubDate')?.textContent??'',
     source:item.querySelector('source')?.textContent??'',
   }));
+}
+
+async function fetchNews(query, limit=8) {
+  const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+  // Race rss2json (no proxy) vs. parallel proxy race — first winner is used
+  const viaRss2json = fetch(
+    `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
+    {signal: sig(8000)}
+  ).then(r=>r.json()).then(data=>{
+    if (data.status!=='ok'||!data.items?.length) throw new Error('rss2json empty');
+    return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||''}));
+  });
+  const viaProxy = proxyFetch(rssUrl, 8000).then(xml=>parseXmlItems(xml, limit));
+  return Promise.any([viaRss2json, viaProxy]);
 }
 
 // ── Feed rendering ────────────────────────────────────────────────────────────
@@ -554,6 +565,35 @@ function wireContactAdd(btnId, nameId, companyId, tagsId, key) {
   [nameId,companyId].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if (e.key==='Enter') addContact(key,nameId,companyId,tagsId); }));
 }
 
+// ── Settings export / import ──────────────────────────────────────────────────
+
+function exportSettings() {
+  const blob = new Blob([JSON.stringify(settings, null, 2)], {type:'application/json'});
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(blob),
+    download: 'morning-dashboard-settings.json',
+  });
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(a.href);
+}
+
+function importSettings(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      settings = {...DEFAULTS, ...imported};
+      persistSettings();
+      syncSettingsUI();
+      document.getElementById('import-status').textContent = 'Settings imported! Click Apply & Refresh.';
+    } catch {
+      document.getElementById('import-status').textContent = 'Could not read that file.';
+    }
+  };
+  reader.readAsText(file);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 function init() {
@@ -572,6 +612,9 @@ function init() {
   wireContactAdd('add-prospect-btn','prospect-name-input','prospect-company-input','prospects-tags','prospects');
   document.getElementById('add-ms-btn').addEventListener('click',addMilestone);
   ['ms-title','ms-month','ms-day','ms-year'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addMilestone(); }));
+  document.getElementById('export-settings-btn').addEventListener('click', exportSettings);
+  document.getElementById('import-settings-input').addEventListener('change', e => importSettings(e.target.files[0]));
+
   document.getElementById('apply-btn').addEventListener('click',()=>{
     const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v;
     persistSettings(); closeSettings(); loadAllFeeds();
