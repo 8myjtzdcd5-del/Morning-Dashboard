@@ -47,6 +47,50 @@ async function fetchWeather(city) {
   return resp.json();
 }
 
+function fmtHour(h) {
+  if (h === 0 || h === 24) return '12 AM';
+  if (h < 12) return `${h} AM`;
+  if (h === 12) return '12 PM';
+  return `${h - 12} PM`;
+}
+
+function buildRainHtml(today) {
+  const hourly = today.hourly || [];
+  const THRESHOLD = 30; // % chance considered meaningful
+
+  // Group consecutive rainy 3-hour slots into ranges
+  const groups = [];
+  let current = null;
+
+  hourly.forEach(h => {
+    const chance = parseInt(h.chanceofrain, 10);
+    const startH = Math.floor(parseInt(h.time, 10) / 100);
+    const endH = startH + 3;
+
+    if (chance >= THRESHOLD) {
+      if (current && current.endH === startH) {
+        current.endH = endH;
+        current.maxChance = Math.max(current.maxChance, chance);
+      } else {
+        current = { startH, endH, maxChance: chance };
+        groups.push(current);
+      }
+    } else {
+      current = null;
+    }
+  });
+
+  if (groups.length === 0) {
+    return `<div class="weather-rain weather-no-rain">&#9728;&#xFE0F; No rain expected today</div>`;
+  }
+
+  const spans = groups.map(g =>
+    `<span class="rain-period">${fmtHour(g.startH)}&ndash;${fmtHour(g.endH)} <em>(${g.maxChance}%)</em></span>`
+  ).join(' &amp; ');
+
+  return `<div class="weather-rain">&#x1F327;&#xFE0F; Rain today: ${spans}</div>`;
+}
+
 function renderWeather(city) {
   const el = document.getElementById('weather-content');
   el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
@@ -56,6 +100,7 @@ function renderWeather(city) {
     const area = data.nearest_area[0];
     const cityName = area.areaName[0].value;
     const country = area.country[0].value;
+    const rainHtml = buildRainHtml(data.weather[0]);
 
     el.innerHTML = `
       <div class="weather-card">
@@ -71,6 +116,7 @@ function renderWeather(city) {
             <span>&#128168; ${cur.windspeedMiles} mph wind</span>
             <span>Feels like ${cur.FeelsLikeF}&deg;F</span>
           </div>
+          ${rainHtml}
         </div>
       </div>`;
   }).catch(() => {

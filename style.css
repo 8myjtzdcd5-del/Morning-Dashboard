@@ -137,6 +137,28 @@ h1 {
   opacity: 0.72;
 }
 
+.weather-rain {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  background: rgba(255,255,255,0.13);
+  border-radius: 8px;
+  padding: 8px 14px;
+  display: inline-block;
+}
+
+.weather-no-rain { opacity: 0.65; }
+
+.rain-period {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rain-period em {
+  font-style: normal;
+  font-weight: 400;
+  opacity: 0.8;
+}
+
 .weather-loading {
   color: var(--text-muted);
   font-size: 0.9rem;
