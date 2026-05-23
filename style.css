@@ -100,6 +100,9 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .market-chg.up   { color: #4ade80; }
 .market-chg.down { color: #f87171; }
 .market-loading  { font-size: 0.72rem; color: rgba(255,255,255,0.35); }
+.market-item-link { text-decoration: none; }
+.market-item-link:hover { background: rgba(255,255,255,0.05); border-radius: 6px; }
+.market-tap { font-size: 0.7rem; color: rgba(255,255,255,0.4); font-weight: 400; }
 
 /* ── Main & rows ─────────────────────────────────────── */
 

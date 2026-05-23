@@ -105,13 +105,38 @@ function fmtIndexPrice(fmt, price) {
   return price>=1000 ? price.toLocaleString('en-US',{maximumFractionDigits:0}) : price.toFixed(2);
 }
 
+async function fetchYahooQuotes(symbols) {
+  const syms = symbols.join(',');
+  const parse = contents => {
+    const r = JSON.parse(contents)?.quoteResponse?.result;
+    if (!r?.length) throw new Error('empty');
+    return r;
+  };
+  // Try direct browser fetch first (no proxy — fastest if Yahoo allows it)
+  const direct = ['https://query1.finance.yahoo.com','https://query2.finance.yahoo.com'].map(base =>
+    fetch(`${base}/v7/finance/quote?symbols=${syms}&formatted=false`, {signal:sig(5000)})
+      .then(r=>r.text()).then(parse)
+  );
+  // Also race through proxies simultaneously
+  const viaProxy = proxyFetch(
+    `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&formatted=false`, 8000
+  ).then(parse);
+  return Promise.any([...direct, viaProxy]);
+}
+
 async function renderMarketBar() {
   const bar = document.getElementById('market-bar');
+  const fallback = () => {
+    bar.innerHTML = INDEX_META.map(m => {
+      const yurl = `https://finance.yahoo.com/quote/${encodeURIComponent(m.symbol)}/`;
+      return `<a class="market-item market-item-link" href="${yurl}" target="_blank" rel="noopener">
+        <span class="market-label">${m.label}</span>
+        <span class="market-price market-tap">tap for quote ↗</span>
+      </a>`;
+    }).join('');
+  };
   try {
-    const syms = INDEX_META.map(i=>i.symbol).join(',');
-    const contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&formatted=false`);
-    const results = JSON.parse(contents)?.quoteResponse?.result || [];
-    if (!results.length) throw new Error('no data');
+    const results = await fetchYahooQuotes(INDEX_META.map(i=>i.symbol));
     bar.innerHTML = results.map(q => {
       const meta = INDEX_META.find(m=>m.symbol===q.symbol); if (!meta) return '';
       const up = q.regularMarketChange >= 0;
@@ -121,9 +146,7 @@ async function renderMarketBar() {
         <span class="market-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${q.regularMarketChangePercent.toFixed(2)}%</span>
       </div>`;
     }).join('');
-  } catch {
-    bar.innerHTML = '<span class="market-loading">Market data unavailable &mdash; markets may be closed</span>';
-  }
+  } catch { fallback(); }
 }
 
 // ── Weather (Open-Meteo, CORS-native) ─────────────────────────────────────────
@@ -409,9 +432,8 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
 
 async function fetchStocks(symbols) {
   if (!symbols.length) return [];
-  const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&formatted=false`;
-  const contents=await proxyFetch(url,7000);
-  return (JSON.parse(contents)?.quoteResponse?.result||[]).map(q=>({
+  const results = await fetchYahooQuotes(symbols);
+  return (results||[]).map(q=>({
     symbol:q.symbol, name:q.shortName||q.longName||q.symbol,
     price:q.regularMarketPrice, change:q.regularMarketChange,
     changePct:q.regularMarketChangePercent,
