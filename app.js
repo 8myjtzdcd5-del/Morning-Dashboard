@@ -124,9 +124,48 @@ async function fetchYahooQuotes(symbols) {
   return Promise.any([...direct, viaProxy]);
 }
 
+function saveCache(key, data) {
+  try { localStorage.setItem(key, JSON.stringify({data, ts: Date.now()})); } catch {}
+}
+function loadCache(key) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key)||'null');
+    if (!raw) return null;
+    const ago = new Date(raw.ts).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return {data: raw.data, ago};
+  } catch { return null; }
+}
+
+function renderIndexBar(results, cached) {
+  const bar = document.getElementById('market-bar');
+  const suffix = cached ? `<span class="market-cached"> &mdash; as of ${cached}</span>` : '';
+  bar.innerHTML = results.map(q => {
+    const meta = INDEX_META.find(m=>m.symbol===q.symbol); if (!meta) return '';
+    const up = q.change >= 0;
+    return `<div class="market-item market-clickable" data-symbol="${escHtml(q.symbol)}" data-name="${escHtml(meta.label)}" title="Click for chart">
+      <span class="market-label">${meta.label}</span>
+      <span class="market-price">${fmtIndexPrice(meta.fmt, q.price)}</span>
+      <span class="market-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${q.changePct.toFixed(2)}%</span>
+    </div>`;
+  }).join('') + suffix;
+  bar.querySelectorAll('.market-clickable').forEach(el =>
+    el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
+  );
+}
+
 async function renderMarketBar() {
   const bar = document.getElementById('market-bar');
-  const fallback = () => {
+  try {
+    const raw = await fetchYahooQuotes(INDEX_META.map(i=>i.symbol));
+    const results = raw.map(q=>({
+      symbol: q.symbol, price: q.regularMarketPrice,
+      change: q.regularMarketChange, changePct: q.regularMarketChangePercent,
+    }));
+    saveCache('mdIndexCache', results);
+    renderIndexBar(results, null);
+  } catch {
+    const cached = loadCache('mdIndexCache');
+    if (cached) { renderIndexBar(cached.data, cached.ago); return; }
     bar.innerHTML = INDEX_META.map(m => {
       const yurl = `https://finance.yahoo.com/quote/${encodeURIComponent(m.symbol)}/`;
       return `<a class="market-item market-item-link" href="${yurl}" target="_blank" rel="noopener">
@@ -134,22 +173,7 @@ async function renderMarketBar() {
         <span class="market-price market-tap">tap for quote ↗</span>
       </a>`;
     }).join('');
-  };
-  try {
-    const results = await fetchYahooQuotes(INDEX_META.map(i=>i.symbol));
-    bar.innerHTML = results.map(q => {
-      const meta = INDEX_META.find(m=>m.symbol===q.symbol); if (!meta) return '';
-      const up = q.regularMarketChange >= 0;
-      return `<div class="market-item market-clickable" data-symbol="${escHtml(q.symbol)}" data-name="${escHtml(meta.label)}" title="Click for chart">
-        <span class="market-label">${meta.label}</span>
-        <span class="market-price">${fmtIndexPrice(meta.fmt, q.regularMarketPrice)}</span>
-        <span class="market-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${q.regularMarketChangePercent.toFixed(2)}%</span>
-      </div>`;
-    }).join('');
-    bar.querySelectorAll('.market-clickable').forEach(el =>
-      el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
-    );
-  } catch { fallback(); }
+  }
 }
 
 // ── Weather (Open-Meteo, CORS-native) ─────────────────────────────────────────
@@ -451,13 +475,10 @@ async function fetchStocks(symbols) {
   }));
 }
 
-function renderStocks(tickers) {
+function paintStocks(stocks, cached) {
   const container=document.getElementById('stocks-feed');
-  if (!tickers.length) { container.innerHTML=buildEmptyState('No tickers added.','Open Settings to add stock symbols.'); return; }
-  container.innerHTML=`<div class="stock-card"><p class="feed-loading">Loading&hellip;</p></div>`;
-  fetchStocks(tickers).then(stocks=>{
-    if (!stocks.length) { container.innerHTML=buildEmptyState('No data returned.','Check your ticker symbols.'); return; }
-    container.innerHTML=stocks.map(s=>{
+  const cacheNote = cached ? `<p class="stocks-cached">Showing last known prices &mdash; as of ${cached}</p>` : '';
+  container.innerHTML = cacheNote + stocks.map(s=>{
       const up=s.change>=0, sign=up?'+':'', fmt=n=>n!=null?n.toFixed(2):'—';
       const closed = s.marketState==='CLOSED' || s.marketState==='PREPRE' || s.marketState==='POSTPOST';
       const pre    = s.marketState==='PRE'  && s.prePrice!=null;
@@ -478,10 +499,24 @@ function renderStocks(tickers) {
         <div class="stock-chart-hint">&#x1F4C8; View chart</div>
       </div>`;
     }).join('');
-    container.querySelectorAll('.stock-clickable').forEach(el =>
-      el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
-    );
-  }).catch(()=>{ container.innerHTML=buildEmptyState('Stock data unavailable.','Markets may be closed or the service is down.'); });
+  container.querySelectorAll('.stock-clickable').forEach(el =>
+    el.addEventListener('click', () => openChart(el.dataset.symbol, el.dataset.name))
+  );
+}
+
+function renderStocks(tickers) {
+  const container=document.getElementById('stocks-feed');
+  if (!tickers.length) { container.innerHTML=buildEmptyState('No tickers added.','Open Settings to add stock symbols.'); return; }
+  container.innerHTML=`<div class="stock-card"><p class="feed-loading">Loading&hellip;</p></div>`;
+  fetchStocks(tickers).then(stocks=>{
+    if (!stocks.length) throw new Error('empty');
+    saveCache('mdStockCache', stocks);
+    paintStocks(stocks, null);
+  }).catch(()=>{
+    const cached = loadCache('mdStockCache');
+    if (cached) { paintStocks(cached.data, cached.ago); return; }
+    container.innerHTML=buildEmptyState('Stock data unavailable.','Prices will appear once a connection is established.');
+  });
 }
 
 // ── F-1 ───────────────────────────────────────────────────────────────────────
