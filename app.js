@@ -695,13 +695,13 @@ function syncSettingsUI() {
 function renderTags(containerId, list, key) {
   const c=document.getElementById(containerId);
   c.innerHTML=list.map((item,i)=>`<span class="tag">${escHtml(item)}<span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span></span>`).join('');
-  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); renderTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
+  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); persistSettings(); renderTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
 }
 
 function renderContactTags(containerId, list, key) {
   const c=document.getElementById(containerId);
   c.innerHTML=list.map((item,i)=>`<span class="tag">${escHtml([item.name,item.company].filter(Boolean).join(' · '))}<span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span></span>`).join('');
-  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); renderContactTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
+  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); persistSettings(); renderContactTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
 }
 
 function renderMilestoneTags() {
@@ -710,21 +710,21 @@ function renderMilestoneTags() {
     const label=`${m.title} · ${MONTH_SHORT[m.month-1]} ${m.day}${m.year?` (since ${m.year})`:''}`;
     return `<span class="tag">${escHtml(label)}<span class="tag-remove" data-type="ms" data-index="${i}" title="Remove">&#x2715;</span></span>`;
   }).join('');
-  c.querySelectorAll('.tag-remove[data-type="ms"]').forEach(btn=>btn.addEventListener('click',()=>{ settings.milestones.splice(parseInt(btn.dataset.index,10),1); renderMilestoneTags(); }));
+  c.querySelectorAll('.tag-remove[data-type="ms"]').forEach(btn=>btn.addEventListener('click',()=>{ settings.milestones.splice(parseInt(btn.dataset.index,10),1); persistSettings(); renderMilestoneTags(); }));
 }
 
 function addItem(key, inputId, tagsId) {
   const input=document.getElementById(inputId); let val=input.value.trim();
   if (key==='tickers') val=val.toUpperCase(); if (!val) return;
   if (!settings[key].includes(val)) settings[key].push(val);
-  input.value=''; renderTags(tagsId,settings[key],key); input.focus();
+  persistSettings(); input.value=''; renderTags(tagsId,settings[key],key); input.focus();
 }
 
 function addContact(key, nameId, companyId, tagsId) {
   const name=document.getElementById(nameId).value.trim(), company=document.getElementById(companyId).value.trim();
   if (!name&&!company) return;
   if (!settings[key].some(e=>e.name===name&&e.company===company)) settings[key].push({name,company});
-  document.getElementById(nameId).value=''; document.getElementById(companyId).value='';
+  persistSettings(); document.getElementById(nameId).value=''; document.getElementById(companyId).value='';
   renderContactTags(tagsId,settings[key],key); document.getElementById(nameId).focus();
 }
 
@@ -735,7 +735,7 @@ function addMilestone() {
   const year=parseInt(document.getElementById('ms-year').value,10)||null;
   if (!title||!month||!day||day<1||day>31) return;
   if (!settings.milestones.some(m=>m.title===title&&m.month===month&&m.day===day)) settings.milestones.push({title,month,day,year});
-  document.getElementById('ms-title').value=''; document.getElementById('ms-month').value='';
+  persistSettings(); document.getElementById('ms-title').value=''; document.getElementById('ms-month').value='';
   document.getElementById('ms-day').value=''; document.getElementById('ms-year').value='';
   renderMilestoneTags(); document.getElementById('ms-title').focus();
 }
@@ -870,7 +870,7 @@ function init() {
     btn.classList.add('active');
     renderTvChart(currentChartSymbol, btn.dataset.range);
   }));
-  document.getElementById('save-city-btn').addEventListener('click',()=>{ const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v; });
+  document.getElementById('save-city-btn').addEventListener('click',()=>{ const v=document.getElementById('weather-city-input').value.trim(); if(v){ settings.weatherCity=v; persistSettings(); } });
   wireAddButton('add-news-topic-btn','news-topic-input','news-topics-tags','newsTopics');
   wireAddButton('add-person-btn','person-input','people-tags','people');
   wireAddButton('add-topic-btn','topic-input','topics-tags','topics');
