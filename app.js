@@ -97,25 +97,44 @@ function updateDateTime() {
 
 // ── CORS proxy with fallback ──────────────────────────────────────────────────
 
+function makeSignal(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const ac = new AbortController();
+  setTimeout(() => ac.abort(), ms);
+  return ac.signal;
+}
+
 async function proxyFetch(url, timeout = 12000) {
-  // allorigins returns {contents:"..."} JSON; try it first
+  const slice = Math.min(timeout, 9000);
+
+  // 1) allorigins — returns {contents:"..."} JSON wrapper
   try {
     const r = await fetch(
       `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-      { signal: AbortSignal.timeout(Math.min(timeout, 9000)) }
+      { signal: makeSignal(slice) }
     );
     if (r.ok) {
       const data = await r.json();
       if (data && data.contents) return data.contents;
     }
   } catch {}
-  // Fallback: corsproxy.io returns the raw response body
-  const r2 = await fetch(
-    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
-    { signal: AbortSignal.timeout(timeout) }
+
+  // 2) corsproxy.io — returns raw body (no "url=" prefix!)
+  try {
+    const r2 = await fetch(
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      { signal: makeSignal(slice) }
+    );
+    if (r2.ok) return r2.text();
+  } catch {}
+
+  // 3) codetabs — last resort
+  const r3 = await fetch(
+    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+    { signal: makeSignal(timeout) }
   );
-  if (!r2.ok) throw new Error(`proxy HTTP ${r2.status}`);
-  return r2.text();
+  if (!r3.ok) throw new Error(`all proxies failed (last: HTTP ${r3.status})`);
+  return r3.text();
 }
 
 // ── Market indices bar ────────────────────────────────────────────────────────
@@ -234,7 +253,7 @@ function buildForecastStrip(daily) {
   }).join('')}</div>`;
 }
 
-function renderWeather(location) {
+function renderWeather(location, attempt = 1) {
   const el = document.getElementById('weather-content');
   el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
   fetchWeather(location).then(({ wx, displayName }) => {
@@ -258,7 +277,8 @@ function renderWeather(location) {
         </div>
       </div>`;
   }).catch(() => {
-    el.innerHTML = `<span class="weather-error">Could not find &ldquo;${escHtml(location)}&rdquo;. Try a city name like &ldquo;Wilmington DE&rdquo;.</span>`;
+    if (attempt < 3) { setTimeout(() => renderWeather(location, attempt + 1), 3000); return; }
+    el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(location)}&rdquo;. Check your city name in Settings or try again later.</span>`;
   });
 }
 
