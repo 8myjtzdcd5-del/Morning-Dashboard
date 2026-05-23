@@ -1,195 +1,128 @@
 'use strict';
 
-// ── Constants ────────────────────────────────────────────────────────────────
-
 const RECENT_DAYS = 14;
 const HISTORY_DAYS = 730;
 const HIST_PREFIX = 'mdHist_';
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTH_NAMES = ['January','February','March','April','May','June',
-                     'July','August','September','October','November','December'];
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 const WMO = {
-  0:'Clear sky', 1:'Mainly clear', 2:'Partly cloudy', 3:'Overcast',
-  45:'Fog', 48:'Icy fog', 51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
-  61:'Light rain', 63:'Rain', 65:'Heavy rain', 66:'Freezing rain', 67:'Heavy freezing rain',
-  71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
-  80:'Light showers', 81:'Showers', 82:'Heavy showers',
-  85:'Snow showers', 86:'Heavy snow showers',
-  95:'Thunderstorm', 96:'Thunderstorm w/ hail', 99:'Severe thunderstorm',
+  0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
+  45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
+  61:'Light rain',63:'Rain',65:'Heavy rain',66:'Freezing rain',67:'Heavy freezing rain',
+  71:'Light snow',73:'Snow',75:'Heavy snow',77:'Snow grains',
+  80:'Light showers',81:'Showers',82:'Heavy showers',
+  85:'Snow showers',86:'Heavy snow showers',
+  95:'Thunderstorm',96:'Thunderstorm w/ hail',99:'Severe thunderstorm',
 };
 const wmoDesc = code => WMO[code] ?? 'Unknown';
 
-// ── Default settings ─────────────────────────────────────────────────────────
+// ── Settings ──────────────────────────────────────────────────────────────────
 
 const DEFAULTS = {
   weatherCity: 'New York',
-  newsTopics: ['Technology', 'Science', 'Business'],
-  people: [],
-  topics: [],
-  clients: [],
-  prospects: [],
-  tickers: [],
-  wishlist: [],
-  milestones: [], // {title, month, day, year}
+  newsTopics: ['Technology','Science','Business'],
+  people: [], topics: [], clients: [], prospects: [],
+  tickers: [], wishlist: [],
+  milestones: [],
 };
 
-// ── State ────────────────────────────────────────────────────────────────────
-
 let settings = loadSettings();
-
 function loadSettings() {
-  try {
-    const raw = localStorage.getItem('morningDashboard');
-    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : { ...DEFAULTS };
-  } catch { return { ...DEFAULTS }; }
+  try { const r = localStorage.getItem('morningDashboard'); return r ? {...DEFAULTS,...JSON.parse(r)} : {...DEFAULTS}; }
+  catch { return {...DEFAULTS}; }
 }
+function persistSettings() { localStorage.setItem('morningDashboard', JSON.stringify(settings)); }
 
-function persistSettings() {
-  localStorage.setItem('morningDashboard', JSON.stringify(settings));
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function toCardId(prefix, label) { return `card-${prefix}-${label.replace(/[^a-z0-9]/gi,'-').toLowerCase()}`; }
+function sig(ms) {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const ac = new AbortController(); setTimeout(() => ac.abort(), ms); return ac.signal;
 }
-
-function toCardId(prefix, label) {
-  return `card-${prefix}-${label.replace(/[^a-z0-9]/gi,'-').toLowerCase()}`;
-}
-
 function isToday(dateStr) {
   if (!dateStr) return false;
   const d = new Date(dateStr), n = new Date();
   return d.getFullYear()===n.getFullYear() && d.getMonth()===n.getMonth() && d.getDate()===n.getDate();
 }
-
-function articleRow(item, showYear = false) {
-  const opts = showYear
-    ? {month:'short',day:'numeric',year:'numeric'}
-    : {month:'short',day:'numeric'};
-  const date = item.date ? new Date(item.date).toLocaleDateString('en-US', opts) : '';
-  return `
-    <li class="news-item">
-      <a class="news-link" href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escHtml(item.title)}</a>
-      <div class="news-meta">
-        ${item.source ? `<span>${escHtml(item.source)}</span>` : ''}
-        ${date ? `<span>${date}</span>` : ''}
-      </div>
-    </li>`;
+function articleRow(item, showYear=false) {
+  const opts = showYear ? {month:'short',day:'numeric',year:'numeric'} : {month:'short',day:'numeric'};
+  const date = item.date ? new Date(item.date).toLocaleDateString('en-US',opts) : '';
+  return `<li class="news-item">
+    <a class="news-link" href="${escHtml(item.link)}" target="_blank" rel="noopener noreferrer">${escHtml(item.title)}</a>
+    <div class="news-meta">${item.source?`<span>${escHtml(item.source)}</span>`:''} ${date?`<span>${date}</span>`:''}</div>
+  </li>`;
 }
+function buildEmptyState(msg, hint) { return `<div class="feed-empty"><strong>${msg}</strong> ${hint}</div>`; }
 
 // ── Date / time ───────────────────────────────────────────────────────────────
 
 function updateDateTime() {
-  const now = new Date();
-  const h = now.getHours();
-  document.getElementById('greeting').textContent =
-    h < 12 ? 'Good Morning' : h < 17 ? 'Good Afternoon' : 'Good Evening';
+  const now = new Date(), h = now.getHours();
+  document.getElementById('greeting').textContent = h<12?'Good Morning':h<17?'Good Afternoon':'Good Evening';
   document.getElementById('datetime').textContent =
     now.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'}) +
     ' · ' + now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
 }
 
-// ── CORS proxy with fallback ──────────────────────────────────────────────────
+// ── CORS proxy (single fast attempt) ─────────────────────────────────────────
 
-function makeSignal(ms) {
-  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
-  const ac = new AbortController();
-  setTimeout(() => ac.abort(), ms);
-  return ac.signal;
-}
-
-async function proxyFetch(url, timeout = 12000) {
-  const slice = Math.min(timeout, 9000);
-
-  // 1) allorigins — returns {contents:"..."} JSON wrapper
-  try {
-    const r = await fetch(
-      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-      { signal: makeSignal(slice) }
-    );
-    if (r.ok) {
-      const data = await r.json();
-      if (data && data.contents) return data.contents;
-    }
-  } catch {}
-
-  // 2) corsproxy.io — returns raw body (no "url=" prefix!)
-  try {
-    const r2 = await fetch(
-      `https://corsproxy.io/?${encodeURIComponent(url)}`,
-      { signal: makeSignal(slice) }
-    );
-    if (r2.ok) return r2.text();
-  } catch {}
-
-  // 3) codetabs — last resort
-  const r3 = await fetch(
-    `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-    { signal: makeSignal(timeout) }
-  );
-  if (!r3.ok) throw new Error(`all proxies failed (last: HTTP ${r3.status})`);
-  return r3.text();
+async function proxyFetch(url, ms=7000) {
+  const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, {signal:sig(ms)});
+  if (!r.ok) throw new Error('proxy failed');
+  const data = await r.json();
+  if (!data.contents) throw new Error('empty proxy response');
+  return data.contents;
 }
 
 // ── Market indices bar ────────────────────────────────────────────────────────
 
 const INDEX_META = [
-  { symbol: '^GSPC', label: 'S&P 500',  fmt: 'price' },
-  { symbol: '^DJI',  label: 'Dow',      fmt: 'price' },
-  { symbol: '^IXIC', label: 'Nasdaq',   fmt: 'price' },
-  { symbol: '^VIX',  label: 'VIX',      fmt: 'decimal' },
-  { symbol: '^TNX',  label: '10Y Yield',fmt: 'yield' },
+  {symbol:'^GSPC',label:'S&P 500',fmt:'price'},
+  {symbol:'^DJI', label:'Dow',    fmt:'price'},
+  {symbol:'^IXIC',label:'Nasdaq', fmt:'price'},
+  {symbol:'^VIX', label:'VIX',    fmt:'decimal'},
+  {symbol:'^TNX', label:'10Y Yield',fmt:'yield'},
 ];
 
 function fmtIndexPrice(fmt, price) {
-  if (fmt === 'yield')   return `${price.toFixed(2)}%`;
-  if (fmt === 'decimal') return price.toFixed(2);
-  return price >= 1000
-    ? price.toLocaleString('en-US', {maximumFractionDigits: 0})
-    : price.toFixed(2);
+  if (fmt==='yield')   return `${price.toFixed(2)}%`;
+  if (fmt==='decimal') return price.toFixed(2);
+  return price>=1000 ? price.toLocaleString('en-US',{maximumFractionDigits:0}) : price.toFixed(2);
 }
 
 async function renderMarketBar() {
   const bar = document.getElementById('market-bar');
   try {
-    const symbols = INDEX_META.map(i => i.symbol);
-    const qs = `symbols=${symbols.join(',')}&formatted=false`;
-    let contents;
-    try { contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
-    catch { contents = await proxyFetch(`https://query2.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
+    const syms = INDEX_META.map(i=>i.symbol).join(',');
+    const contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&formatted=false`);
     const results = JSON.parse(contents)?.quoteResponse?.result || [];
-
+    if (!results.length) throw new Error('no data');
     bar.innerHTML = results.map(q => {
-      const meta = INDEX_META.find(m => m.symbol === q.symbol);
-      if (!meta) return '';
+      const meta = INDEX_META.find(m=>m.symbol===q.symbol); if (!meta) return '';
       const up = q.regularMarketChange >= 0;
-      const sign = up ? '+' : '';
-      const price = fmtIndexPrice(meta.fmt, q.regularMarketPrice);
-      const chg = `${sign}${q.regularMarketChangePercent.toFixed(2)}%`;
-      return `
-        <div class="market-item">
-          <span class="market-label">${meta.label}</span>
-          <span class="market-price">${price}</span>
-          <span class="market-chg ${up ? 'up' : 'down'}">${up ? '▲' : '▼'} ${chg}</span>
-        </div>`;
+      return `<div class="market-item">
+        <span class="market-label">${meta.label}</span>
+        <span class="market-price">${fmtIndexPrice(meta.fmt, q.regularMarketPrice)}</span>
+        <span class="market-chg ${up?'up':'down'}">${up?'▲':'▼'} ${up?'+':''}${q.regularMarketChangePercent.toFixed(2)}%</span>
+      </div>`;
     }).join('');
   } catch {
-    bar.innerHTML = '<span class="market-loading">Market data unavailable</span>';
+    bar.innerHTML = '<span class="market-loading">Market data unavailable &mdash; markets may be closed</span>';
   }
 }
 
-// ── Weather (Open-Meteo) ──────────────────────────────────────────────────────
+// ── Weather (Open-Meteo, CORS-native) ─────────────────────────────────────────
 
 async function fetchWeather(location) {
   const geoResp = await fetch(
     `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(location)}&count=1&language=en&format=json`,
-    { signal: AbortSignal.timeout(8000) }
+    {signal: sig(8000)}
   );
   const geoData = await geoResp.json();
   const geo = geoData.results?.[0];
@@ -203,296 +136,261 @@ async function fetchWeather(location) {
     temperature_unit: 'fahrenheit', wind_speed_unit: 'mph',
     timezone: 'auto', forecast_days: '5',
   });
-  const wxResp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`,
-    { signal: AbortSignal.timeout(8000) });
+  const wxResp = await fetch(`https://api.open-meteo.com/v1/forecast?${params}`, {signal: sig(8000)});
   const wx = await wxResp.json();
-  const displayName = [geo.name, geo.admin1, geo.country_code].filter(Boolean).join(', ');
-  return { wx, displayName };
+  return {wx, displayName: [geo.name,geo.admin1,geo.country_code].filter(Boolean).join(', ')};
 }
 
 function fmtHour(h) {
-  if (h === 0 || h === 24) return '12 AM';
-  if (h < 12) return `${h} AM`;
-  if (h === 12) return '12 PM';
-  return `${h - 12} PM`;
+  if (h===0||h===24) return '12 AM'; if (h<12) return `${h} AM`;
+  if (h===12) return '12 PM'; return `${h-12} PM`;
 }
 
 function buildRainHtml(hourly) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const nowHour = new Date().getHours();
-  const THRESHOLD = 30;
+  const todayStr = new Date().toISOString().slice(0,10);
+  const nowHour  = new Date().getHours();
   const slots = hourly.time
-    .map((t, i) => ({ hour: parseInt(t.slice(11, 13), 10), prob: hourly.precipitation_probability[i], date: t.slice(0, 10) }))
-    .filter(s => s.date === todayStr && s.hour >= nowHour);
-  const groups = []; let cur = null;
-  slots.forEach(s => {
-    if (s.prob >= THRESHOLD) {
-      if (cur && cur.endH === s.hour) { cur.endH = s.hour + 1; cur.maxProb = Math.max(cur.maxProb, s.prob); }
-      else { cur = { startH: s.hour, endH: s.hour + 1, maxProb: s.prob }; groups.push(cur); }
-    } else { cur = null; }
+    .map((t,i)=>({hour:parseInt(t.slice(11,13),10),prob:hourly.precipitation_probability[i],date:t.slice(0,10)}))
+    .filter(s=>s.date===todayStr && s.hour>=nowHour);
+  const groups=[]; let cur=null;
+  slots.forEach(s=>{
+    if (s.prob>=30) {
+      if (cur && cur.endH===s.hour) { cur.endH=s.hour+1; cur.maxProb=Math.max(cur.maxProb,s.prob); }
+      else { cur={startH:s.hour,endH:s.hour+1,maxProb:s.prob}; groups.push(cur); }
+    } else { cur=null; }
   });
   if (!groups.length) return `<div class="weather-rain weather-no-rain">&#9728;&#xFE0F; No rain expected today</div>`;
-  const spans = groups.map(g =>
-    `<span class="rain-period">${fmtHour(g.startH)}&ndash;${fmtHour(g.endH)} <em>(${g.maxProb}%)</em></span>`
-  ).join(' &amp; ');
-  return `<div class="weather-rain">&#x1F327;&#xFE0F; Rain today: ${spans}</div>`;
+  return `<div class="weather-rain">&#x1F327;&#xFE0F; Rain today: ${groups.map(g=>`<span class="rain-period">${fmtHour(g.startH)}&ndash;${fmtHour(g.endH)} <em>(${g.maxProb}%)</em></span>`).join(' &amp; ')}</div>`;
 }
 
 function buildForecastStrip(daily) {
-  return `<div class="forecast-strip">${daily.time.slice(0, 5).map((dateStr, i) => {
-    const d = new Date(dateStr + 'T12:00:00');
-    const name = i === 0 ? 'Today' : DAY_NAMES[d.getDay()];
-    const maxRain = daily.precipitation_probability_max[i] || 0;
-    return `
-      <div class="forecast-day">
-        <div class="forecast-day-name">${name}</div>
-        <div class="forecast-day-desc">${wmoDesc(daily.weather_code[i])}</div>
-        <div class="forecast-day-temps">${Math.round(daily.temperature_2m_max[i])}&deg;<span class="lo">${Math.round(daily.temperature_2m_min[i])}&deg;</span></div>
-        ${maxRain >= 20 ? `<div class="forecast-day-rain">&#x1F327; ${maxRain}%</div>` : ''}
-      </div>`;
+  return `<div class="forecast-strip">${daily.time.slice(0,5).map((ds,i)=>{
+    const d=new Date(ds+'T12:00:00');
+    const rain=daily.precipitation_probability_max[i]||0;
+    return `<div class="forecast-day">
+      <div class="forecast-day-name">${i===0?'Today':DAY_NAMES[d.getDay()]}</div>
+      <div class="forecast-day-desc">${wmoDesc(daily.weather_code[i])}</div>
+      <div class="forecast-day-temps">${Math.round(daily.temperature_2m_max[i])}&deg;<span class="lo">${Math.round(daily.temperature_2m_min[i])}&deg;</span></div>
+      ${rain>=20?`<div class="forecast-day-rain">&#x1F327; ${rain}%</div>`:''}
+    </div>`;
   }).join('')}</div>`;
 }
 
-function renderWeather(location, attempt = 1) {
+function renderWeather(location, attempt=1) {
   const el = document.getElementById('weather-content');
-  el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
-  fetchWeather(location).then(({ wx, displayName }) => {
+  if (attempt===1) el.innerHTML = '<span class="weather-loading">Loading weather&hellip;</span>';
+  fetchWeather(location).then(({wx,displayName})=>{
     const cur = wx.current;
-    el.innerHTML = `
-      <div class="weather-card">
-        <div class="weather-temp-block">
-          <div class="weather-temp">${Math.round(cur.temperature_2m)}&deg;F</div>
-          <div class="weather-temp-alt">${Math.round((cur.temperature_2m - 32) * 5 / 9)}&deg;C</div>
+    el.innerHTML = `<div class="weather-card">
+      <div class="weather-temp-block">
+        <div class="weather-temp">${Math.round(cur.temperature_2m)}&deg;F</div>
+        <div class="weather-temp-alt">${Math.round((cur.temperature_2m-32)*5/9)}&deg;C</div>
+      </div>
+      <div class="weather-info">
+        <div class="weather-desc">${wmoDesc(cur.weather_code)}</div>
+        <div class="weather-location">${escHtml(displayName)}</div>
+        <div class="weather-details">
+          <span>&#128167; ${cur.relative_humidity_2m}% humidity</span>
+          <span>&#128168; ${Math.round(cur.wind_speed_10m)} mph wind</span>
+          <span>Feels like ${Math.round(cur.apparent_temperature)}&deg;F</span>
         </div>
-        <div class="weather-info">
-          <div class="weather-desc">${wmoDesc(cur.weather_code)}</div>
-          <div class="weather-location">${escHtml(displayName)}</div>
-          <div class="weather-details">
-            <span>&#128167; ${cur.relative_humidity_2m}% humidity</span>
-            <span>&#128168; ${Math.round(cur.wind_speed_10m)} mph wind</span>
-            <span>Feels like ${Math.round(cur.apparent_temperature)}&deg;F</span>
-          </div>
-          ${buildRainHtml(wx.hourly)}
-          ${buildForecastStrip(wx.daily)}
-        </div>
-      </div>`;
-  }).catch(() => {
-    if (attempt < 3) { setTimeout(() => renderWeather(location, attempt + 1), 3000); return; }
-    el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(location)}&rdquo;. Check your city name in Settings or try again later.</span>`;
+        ${buildRainHtml(wx.hourly)}
+        ${buildForecastStrip(wx.daily)}
+      </div>
+    </div>`;
+  }).catch(()=>{
+    if (attempt<3) { setTimeout(()=>renderWeather(location,attempt+1), 3000); return; }
+    el.innerHTML = `<span class="weather-error">Could not load weather for &ldquo;${escHtml(location)}&rdquo;. Check Settings or try refreshing.</span>`;
   });
 }
 
-// ── Quote of the day ──────────────────────────────────────────────────────────
+// ── Quote of the day (ZenQuotes, CORS-native) ─────────────────────────────────
 
 async function renderQuote() {
   const el = document.getElementById('quote-feed');
   el.innerHTML = '<p class="feed-loading">Loading quote&hellip;</p>';
   try {
-    const contents = await proxyFetch('https://zenquotes.io/api/today', 8000);
-    const [q] = JSON.parse(contents);
-    el.innerHTML = `
-      <div class="quote-card">
+    const resp = await fetch('https://zenquotes.io/api/today', {signal:sig(6000)});
+    const [q] = await resp.json();
+    el.innerHTML = `<div class="quote-card">
+      <div class="quote-mark">&ldquo;</div>
+      <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
+      <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
+    </div>`;
+  } catch {
+    try {
+      const contents = await proxyFetch('https://zenquotes.io/api/today', 6000);
+      const [q] = JSON.parse(contents);
+      el.innerHTML = `<div class="quote-card">
         <div class="quote-mark">&ldquo;</div>
         <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
         <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
       </div>`;
-  } catch {
-    el.innerHTML = '<p class="feed-loading">Quote unavailable today.</p>';
+    } catch {
+      el.innerHTML = '<p class="feed-loading">Quote unavailable today.</p>';
+    }
   }
 }
 
-// ── Special Dates (milestones) ────────────────────────────────────────────────
+// ── Special Dates ─────────────────────────────────────────────────────────────
 
 function daysUntil(month, day) {
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  let target = new Date(today.getFullYear(), month - 1, day);
-  if (target < today) target.setFullYear(today.getFullYear() + 1);
-  return Math.round((target - today) / 86400000);
+  const today = new Date(); today.setHours(0,0,0,0);
+  let target = new Date(today.getFullYear(), month-1, day);
+  if (target < today) target.setFullYear(today.getFullYear()+1);
+  return Math.round((target-today)/86400000);
 }
 
 function renderMilestones() {
   const el = document.getElementById('milestones-feed');
-  const { milestones } = settings;
-
+  const {milestones} = settings;
   if (!milestones.length) {
-    el.innerHTML = '<p class="milestone-empty">No special dates added yet. Open Settings to add birthdays, anniversaries, sobriety dates, and more.</p>';
+    el.innerHTML = '<p class="milestone-empty">No special dates added yet. Open Settings to add birthdays, anniversaries, and more.</p>';
     return;
   }
-
   const thisYear = new Date().getFullYear();
-  const enriched = milestones.map(m => ({ ...m, days: daysUntil(m.month, m.day) }))
-    .sort((a, b) => a.days - b.days);
-
-  // Show all upcoming in next 30 days, then any remaining
-  const soon = enriched.filter(m => m.days <= 30);
-  const rest = enriched.filter(m => m.days > 30);
-  const toShow = soon.length > 0 ? enriched : enriched.slice(0, 5);
-
-  el.innerHTML = `<div class="milestone-list">${toShow.map(m => {
-    const isToday   = m.days === 0;
-    const isTomorrow = m.days === 1;
-    const isSoon    = m.days <= 7 && m.days > 1;
-    const whenLabel = isToday ? '&#x1F382; Today!'
-      : isTomorrow ? 'Tomorrow'
-      : m.days <= 30 ? `In ${m.days} days`
-      : `${MONTH_SHORT[m.month - 1]} ${m.day}`;
-    const yearsAgo  = m.year ? thisYear - m.year : null;
-    const yearsStr  = yearsAgo && yearsAgo > 0 ? `${yearsAgo} year${yearsAgo > 1 ? 's' : ''}` : null;
-
-    return `
-      <div class="milestone-item ${isToday ? 'is-today' : isSoon ? 'is-soon' : ''}">
-        <div>
-          <div class="milestone-title">${escHtml(m.title)}</div>
-          ${yearsStr ? `<div class="milestone-years">${yearsStr}</div>` : ''}
-        </div>
-        <div class="milestone-when">${whenLabel}<br><span style="opacity:0.7">${MONTH_SHORT[m.month-1]} ${m.day}</span></div>
-      </div>`;
+  const enriched = milestones.map(m=>({...m,days:daysUntil(m.month,m.day)})).sort((a,b)=>a.days-b.days);
+  const toShow = enriched.filter(m=>m.days<=30).length > 0 ? enriched : enriched.slice(0,5);
+  el.innerHTML = `<div class="milestone-list">${toShow.map(m=>{
+    const today2=m.days===0, soon=m.days<=7&&m.days>1;
+    const when = today2?'&#x1F382; Today!':m.days===1?'Tomorrow':m.days<=30?`In ${m.days} days`:`${MONTH_SHORT[m.month-1]} ${m.day}`;
+    const yrs = m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
+    return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''}">
+      <div><div class="milestone-title">${escHtml(m.title)}</div>${yrs?`<div class="milestone-years">${yrs}</div>`:''}</div>
+      <div class="milestone-when">${when}<br><span style="opacity:0.7">${MONTH_SHORT[m.month-1]} ${m.day}</span></div>
+    </div>`;
   }).join('')}</div>`;
 }
 
 // ── History storage ───────────────────────────────────────────────────────────
 
-function histKey(name, company) {
-  return HIST_PREFIX + [name, company].filter(Boolean).join('_').toLowerCase().replace(/[^a-z0-9]/g,'-');
-}
-function getHistory(key) {
-  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
-}
-function mergeHistory(key, freshArticles) {
+function histKey(name,company) { return HIST_PREFIX+[name,company].filter(Boolean).join('_').toLowerCase().replace(/[^a-z0-9]/g,'-'); }
+function getHistory(key) { try { return JSON.parse(localStorage.getItem(key)||'[]'); } catch { return []; } }
+function mergeHistory(key, fresh) {
   const existing = getHistory(key);
-  const seenLinks = new Set(existing.map(a => a.link));
-  const merged = [
-    ...freshArticles.filter(a => a.link && !seenLinks.has(a.link)).map(a => ({ ...a, _saved: Date.now() })),
-    ...existing,
-  ];
-  const cutoffMs = Date.now() - HISTORY_DAYS * 86400000;
-  const pruned = merged.filter(a => (a.date ? new Date(a.date).getTime() : (a._saved || 0)) > cutoffMs);
-  pruned.sort((a, b) => new Date(b.date || b._saved || 0) - new Date(a.date || a._saved || 0));
+  const seen = new Set(existing.map(a=>a.link));
+  const merged = [...fresh.filter(a=>a.link&&!seen.has(a.link)).map(a=>({...a,_saved:Date.now()})),...existing];
+  const cutoff = Date.now()-HISTORY_DAYS*86400000;
+  const pruned = merged.filter(a=>(a.date?new Date(a.date).getTime():(a._saved||0))>cutoff);
+  pruned.sort((a,b)=>new Date(b.date||b._saved||0)-new Date(a.date||a._saved||0));
   localStorage.setItem(key, JSON.stringify(pruned));
   return pruned;
 }
 function filterRecent(articles) {
-  const cutoff = Date.now() - RECENT_DAYS * 86400000;
-  return articles.filter(a => a.date && new Date(a.date).getTime() > cutoff);
+  const cutoff = Date.now()-RECENT_DAYS*86400000;
+  return articles.filter(a=>a.date&&new Date(a.date).getTime()>cutoff);
 }
 
-// ── News fetching ─────────────────────────────────────────────────────────────
+// ── News fetching (rss2json — no proxy needed) ────────────────────────────────
 
-async function fetchNews(query, limit = 8) {
+async function fetchNews(query, limit=8) {
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-  const contents = await proxyFetch(rssUrl, 12000);
-  const doc = new DOMParser().parseFromString(contents, 'text/xml');
-  return Array.from(doc.querySelectorAll('item')).slice(0, limit).map(item => ({
-    title: item.querySelector('title')?.textContent ?? '',
-    link:  item.querySelector('link')?.textContent?.trim() ?? '#',
-    date:  item.querySelector('pubDate')?.textContent ?? '',
-    source: item.querySelector('source')?.textContent ?? '',
+  try {
+    // rss2json has native CORS support — no proxy needed
+    const resp = await fetch(
+      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
+      {signal: sig(8000)}
+    );
+    const data = await resp.json();
+    if (data.status==='ok' && data.items?.length) {
+      return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||''}));
+    }
+  } catch {}
+  // Fallback: allorigins proxy → raw RSS XML
+  const xml = await proxyFetch(rssUrl, 7000);
+  const doc = new DOMParser().parseFromString(xml,'text/xml');
+  return Array.from(doc.querySelectorAll('item')).slice(0,limit).map(item=>({
+    title: item.querySelector('title')?.textContent??'',
+    link:  item.querySelector('link')?.textContent?.trim()??'#',
+    date:  item.querySelector('pubDate')?.textContent??'',
+    source:item.querySelector('source')?.textContent??'',
   }));
 }
 
-// ── Generic feed ──────────────────────────────────────────────────────────────
-
-function buildEmptyState(msg, hint) {
-  return `<div class="feed-empty"><strong>${msg}</strong> ${hint}</div>`;
-}
+// ── Feed rendering ────────────────────────────────────────────────────────────
 
 function buildNewsCard(label, items) {
-  const todayItems = (items || []).filter(i => isToday(i.date));
-  const body = todayItems.length === 0
+  const todayItems = (items||[]).filter(i=>isToday(i.date));
+  const body = todayItems.length===0
     ? `<p class="feed-loading">No articles today yet &mdash; check back later.</p>`
-    : `<ul class="news-list">${todayItems.map(i => articleRow(i)).join('')}</ul>`;
-  return `
-    <div class="feed-card">
-      <div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>
-      ${body}
-    </div>`;
+    : `<ul class="news-list">${todayItems.map(i=>articleRow(i)).join('')}</ul>`;
+  return `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>${body}</div>`;
 }
 
 function loadSection(containerId, items, prefix) {
   const container = document.getElementById(containerId);
-  if (!items.length) {
-    container.innerHTML = buildEmptyState('Nothing here yet.', 'Open Settings to add some entries.');
-    return;
-  }
-  container.innerHTML = items.map(item => `
-    <div class="feed-card is-loading" id="${toCardId(prefix, item)}">
+  if (!items.length) { container.innerHTML = buildEmptyState('Nothing here yet.','Open Settings to add some entries.'); return; }
+  container.innerHTML = items.map(item=>`
+    <div class="feed-card is-loading" id="${toCardId(prefix,item)}">
       <div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div>
       <p class="feed-loading">Loading&hellip;</p>
     </div>`).join('');
-
-  items.forEach(async item => {
-    const cardId = toCardId(prefix, item);
-    let newsItems = null;
-    try { newsItems = await fetchNews(item); } catch {}
-    const ph = document.getElementById(cardId);
-    if (ph) ph.outerHTML = newsItems === null
-      ? `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Failed to load.</p></div>`
-      : buildNewsCard(item, newsItems);
+  items.forEach(async item=>{
+    const cardId = toCardId(prefix,item);
+    let newsItems=null;
+    try { newsItems=await fetchNews(item); } catch {}
+    const ph=document.getElementById(cardId);
+    if (ph) ph.outerHTML=newsItems===null
+      ? `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load &mdash; try refreshing.</p></div>`
+      : buildNewsCard(item,newsItems);
   });
 }
 
 // ── Contact cards ─────────────────────────────────────────────────────────────
 
-function contactLabel(e) { return [e.name, e.company].filter(Boolean).join(' · '); }
+function contactLabel(e) { return [e.name,e.company].filter(Boolean).join(' · '); }
 
 function buildContactCard(entity, allArticles) {
-  const recent = filterRecent(allArticles);
-  const recentBody = recent.length > 0
-    ? `<ul class="news-list">${recent.map(a => articleRow(a, false)).join('')}</ul>`
+  const recent=filterRecent(allArticles);
+  const recentBody=recent.length>0
+    ? `<ul class="news-list">${recent.map(a=>articleRow(a,false)).join('')}</ul>`
     : `<p class="feed-loading">No news in the last ${RECENT_DAYS} days.</p>`;
-  const historyBody = allArticles.length > 0
-    ? `<ul class="news-list">${allArticles.map(a => articleRow(a, true)).join('')}</ul>`
+  const histBody=allArticles.length>0
+    ? `<ul class="news-list">${allArticles.map(a=>articleRow(a,true)).join('')}</ul>`
     : `<p class="feed-loading">History will build each time you open the dashboard.</p>`;
-  return `
-    <div class="feed-card contact-card">
-      <div class="feed-card-label">
-        <span class="label-dot"></span>
-        <span class="contact-name">${escHtml(entity.name || entity.company)}</span>
-        ${entity.name && entity.company ? `<span class="contact-company">${escHtml(entity.company)}</span>` : ''}
-      </div>
-      <div class="card-tabs">
-        <button class="card-tab active" data-panel="recent">Recent&nbsp;<span class="tab-count">${recent.length}</span></button>
-        <button class="card-tab" data-panel="history">History&nbsp;<span class="tab-count">${allArticles.length}</span></button>
-      </div>
-      <div class="tab-panel" data-panel="recent">${recentBody}</div>
-      <div class="tab-panel hidden" data-panel="history">${historyBody}</div>
-    </div>`;
+  return `<div class="feed-card contact-card">
+    <div class="feed-card-label"><span class="label-dot"></span>
+      <span class="contact-name">${escHtml(entity.name||entity.company)}</span>
+      ${entity.name&&entity.company?`<span class="contact-company">${escHtml(entity.company)}</span>`:''}
+    </div>
+    <div class="card-tabs">
+      <button class="card-tab active" data-panel="recent">Recent&nbsp;<span class="tab-count">${recent.length}</span></button>
+      <button class="card-tab" data-panel="history">History&nbsp;<span class="tab-count">${allArticles.length}</span></button>
+    </div>
+    <div class="tab-panel" data-panel="recent">${recentBody}</div>
+    <div class="tab-panel hidden" data-panel="history">${histBody}</div>
+  </div>`;
 }
 
 function wireTabSwitching(container) {
-  container.addEventListener('click', e => {
-    const tab = e.target.closest('.card-tab'); if (!tab) return;
-    const card = tab.closest('.contact-card'); if (!card) return;
-    const panel = tab.dataset.panel;
-    card.querySelectorAll('.card-tab').forEach(t => t.classList.remove('active'));
-    card.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  container.addEventListener('click',e=>{
+    const tab=e.target.closest('.card-tab'); if (!tab) return;
+    const card=tab.closest('.contact-card'); if (!card) return;
+    card.querySelectorAll('.card-tab').forEach(t=>t.classList.remove('active'));
+    card.querySelectorAll('.tab-panel').forEach(p=>p.classList.add('hidden'));
     tab.classList.add('active');
-    card.querySelector(`.tab-panel[data-panel="${panel}"]`).classList.remove('hidden');
+    card.querySelector(`.tab-panel[data-panel="${tab.dataset.panel}"]`).classList.remove('hidden');
   });
 }
 
 function loadContactSection(containerId, entities, prefix, emptyHint) {
-  const container = document.getElementById(containerId);
-  if (!entities.length) { container.innerHTML = buildEmptyState('Nobody added yet.', emptyHint); return; }
-  container.innerHTML = entities.map(entity => `
-    <div class="feed-card contact-card is-loading" id="${toCardId(prefix, entity.name + entity.company)}">
+  const container=document.getElementById(containerId);
+  if (!entities.length) { container.innerHTML=buildEmptyState('Nobody added yet.',emptyHint); return; }
+  container.innerHTML=entities.map(entity=>`
+    <div class="feed-card contact-card is-loading" id="${toCardId(prefix,entity.name+entity.company)}">
       <div class="feed-card-label"><span class="label-dot"></span>${escHtml(contactLabel(entity))}</div>
       <p class="feed-loading">Loading&hellip;</p>
     </div>`).join('');
   wireTabSwitching(container);
-  entities.forEach(async entity => {
-    const key = histKey(entity.name, entity.company);
-    const cardId = toCardId(prefix, entity.name + entity.company);
-    const query = [entity.name, entity.company].filter(Boolean).map(s => `"${s}"`).join(' OR ');
-    let fresh = [];
-    try { fresh = await fetchNews(query, 20); } catch {}
-    const allArticles = mergeHistory(key, fresh);
-    const ph = document.getElementById(cardId);
-    if (ph) {
-      const tmp = document.createElement('div');
-      tmp.innerHTML = buildContactCard(entity, allArticles);
-      ph.replaceWith(tmp.firstElementChild);
-    }
+  entities.forEach(async entity=>{
+    const key=histKey(entity.name,entity.company);
+    const cardId=toCardId(prefix,entity.name+entity.company);
+    const query=[entity.name,entity.company].filter(Boolean).map(s=>`"${s}"`).join(' OR ');
+    let fresh=[];
+    try { fresh=await fetchNews(query,20); } catch {}
+    const allArticles=mergeHistory(key,fresh);
+    const ph=document.getElementById(cardId);
+    if (ph) { const tmp=document.createElement('div'); tmp.innerHTML=buildContactCard(entity,allArticles); ph.replaceWith(tmp.firstElementChild); }
   });
 }
 
@@ -500,86 +398,72 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
 
 async function fetchStocks(symbols) {
   if (!symbols.length) return [];
-  const qs = `symbols=${symbols.join(',')}&formatted=false`;
-  let contents;
-  try { contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
-  catch { contents = await proxyFetch(`https://query2.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
-  return (JSON.parse(contents)?.quoteResponse?.result || []).map(q => ({
-    symbol: q.symbol, name: q.shortName || q.longName || q.symbol,
-    price: q.regularMarketPrice, change: q.regularMarketChange,
-    changePct: q.regularMarketChangePercent,
-    time: q.regularMarketTime ? new Date(q.regularMarketTime * 1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : '',
+  const url=`https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}&formatted=false`;
+  const contents=await proxyFetch(url,7000);
+  return (JSON.parse(contents)?.quoteResponse?.result||[]).map(q=>({
+    symbol:q.symbol, name:q.shortName||q.longName||q.symbol,
+    price:q.regularMarketPrice, change:q.regularMarketChange,
+    changePct:q.regularMarketChangePercent,
+    time:q.regularMarketTime?new Date(q.regularMarketTime*1000).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'',
   }));
 }
 
 function renderStocks(tickers) {
-  const container = document.getElementById('stocks-feed');
-  if (!tickers.length) { container.innerHTML = buildEmptyState('No tickers added.', 'Open Settings to add stock symbols.'); return; }
-  container.innerHTML = `<div class="stock-card"><p class="feed-loading">Loading&hellip;</p></div>`;
-  fetchStocks(tickers).then(stocks => {
-    if (!stocks.length) { container.innerHTML = buildEmptyState('No data returned.', 'Check your ticker symbols.'); return; }
-    container.innerHTML = stocks.map(s => {
-      const up = s.change >= 0, sign = up ? '+' : '', fmt = n => n != null ? n.toFixed(2) : '—';
-      return `
-        <div class="stock-card ${up ? 'up' : 'down'}">
-          <div class="stock-symbol">${escHtml(s.symbol)}</div>
-          <div class="stock-name">${escHtml(s.name)}</div>
-          <div class="stock-price">$${fmt(s.price)}</div>
-          <div class="stock-change">${sign}${fmt(s.change)} (${sign}${fmt(s.changePct)}%)</div>
-          ${s.time ? `<div class="stock-time">As of ${s.time}</div>` : ''}
-        </div>`;
+  const container=document.getElementById('stocks-feed');
+  if (!tickers.length) { container.innerHTML=buildEmptyState('No tickers added.','Open Settings to add stock symbols.'); return; }
+  container.innerHTML=`<div class="stock-card"><p class="feed-loading">Loading&hellip;</p></div>`;
+  fetchStocks(tickers).then(stocks=>{
+    if (!stocks.length) { container.innerHTML=buildEmptyState('No data returned.','Check your ticker symbols.'); return; }
+    container.innerHTML=stocks.map(s=>{
+      const up=s.change>=0,sign=up?'+':'',fmt=n=>n!=null?n.toFixed(2):'—';
+      return `<div class="stock-card ${up?'up':'down'}">
+        <div class="stock-symbol">${escHtml(s.symbol)}</div>
+        <div class="stock-name">${escHtml(s.name)}</div>
+        <div class="stock-price">$${fmt(s.price)}</div>
+        <div class="stock-change">${sign}${fmt(s.change)} (${sign}${fmt(s.changePct)}%)</div>
+        ${s.time?`<div class="stock-time">As of ${s.time}</div>`:''}
+      </div>`;
     }).join('');
-  }).catch(() => { container.innerHTML = buildEmptyState('Could not load stock data.', 'Check your connection.'); });
+  }).catch(()=>{ container.innerHTML=buildEmptyState('Stock data unavailable.','Markets may be closed or the service is down.'); });
 }
 
 // ── F-1 ───────────────────────────────────────────────────────────────────────
 
 async function renderF1() {
-  const container = document.getElementById('f1-feed');
-  container.innerHTML = `<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
-  let items = [];
-  try { items = await fetchNews('"Formula 1" OR "Formula One" OR "F1" Grand Prix', 15); } catch {}
-  const fresh = items.filter(i => i.date && (Date.now() - new Date(i.date).getTime()) < 86400000);
-  const article = fresh[0] || items[0];
-  if (!article) {
-    container.innerHTML = `<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found. Check back later.</p></div>`;
-    return;
-  }
-  const isFresh = fresh.length > 0;
-  const date = article.date ? new Date(article.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-  container.innerHTML = `
-    <div class="f1-card">
-      <div class="f1-eyebrow">
-        <span class="f1-dot"></span>Formula 1
-        ${isFresh ? '<span class="f1-fresh">&#x25CF; LIVE</span>' : ''}
-      </div>
-      <a class="f1-headline" href="${escHtml(article.link)}" target="_blank" rel="noopener noreferrer">${escHtml(article.title)}</a>
-      <div class="f1-meta">
-        ${article.source ? escHtml(article.source) + (date ? ' &bull; ' : '') : ''}${date}
-        ${!isFresh ? '<br><span class="f1-stale">No updates in 24h &mdash; showing latest</span>' : ''}
-      </div>
-    </div>`;
+  const container=document.getElementById('f1-feed');
+  container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
+  let items=[];
+  try { items=await fetchNews('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
+  const fresh=items.filter(i=>i.date&&(Date.now()-new Date(i.date).getTime())<86400000);
+  const article=fresh[0]||items[0];
+  if (!article) { container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="f1-stale">No recent news found.</p></div>`; return; }
+  const isFresh=fresh.length>0;
+  const date=article.date?new Date(article.date).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  container.innerHTML=`<div class="f1-card">
+    <div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1 ${isFresh?'<span class="f1-fresh">&#x25CF; LIVE</span>':''}</div>
+    <a class="f1-headline" href="${escHtml(article.link)}" target="_blank" rel="noopener noreferrer">${escHtml(article.title)}</a>
+    <div class="f1-meta">${article.source?escHtml(article.source)+(date?' &bull; ':''):''}${date}${!isFresh?'<br><span class="f1-stale">No updates in 24h &mdash; showing latest</span>':''}</div>
+  </div>`;
 }
 
 // ── Wish List ─────────────────────────────────────────────────────────────────
 
 function renderWishlist(items) {
-  const container = document.getElementById('wishlist-feed');
-  if (!items.length) { container.innerHTML = buildEmptyState('No items yet.', 'Open Settings to add something to your wish list.'); return; }
-  const q = item => encodeURIComponent(item);
-  container.innerHTML = items.map(item => `
-    <div class="wishlist-card">
-      <div class="wishlist-item-name">${escHtml(item)}</div>
-      <div class="wishlist-links">
-        <a class="shop-link amazon"  href="https://www.amazon.com/s?k=${q(item)}" target="_blank" rel="noopener">Amazon</a>
-        <a class="shop-link google"  href="https://shopping.google.com/search?q=${q(item)}" target="_blank" rel="noopener">Google</a>
-        <a class="shop-link ebay"    href="https://www.ebay.com/sch/i.html?_nkw=${q(item)}" target="_blank" rel="noopener">eBay</a>
-        <a class="shop-link bestbuy" href="https://www.bestbuy.com/site/searchpage.jsp?st=${q(item)}" target="_blank" rel="noopener">Best Buy</a>
-      </div>
-    </div>`).join('');
+  const container=document.getElementById('wishlist-feed');
+  if (!items.length) { container.innerHTML=buildEmptyState('No items yet.','Open Settings to add something to your wish list.'); return; }
+  const q=item=>encodeURIComponent(item);
+  container.innerHTML=items.map(item=>`<div class="wishlist-card">
+    <div class="wishlist-item-name">${escHtml(item)}</div>
+    <div class="wishlist-links">
+      <a class="shop-link amazon"  href="https://www.amazon.com/s?k=${q(item)}" target="_blank" rel="noopener">Amazon</a>
+      <a class="shop-link google"  href="https://shopping.google.com/search?q=${q(item)}" target="_blank" rel="noopener">Google</a>
+      <a class="shop-link ebay"    href="https://www.ebay.com/sch/i.html?_nkw=${q(item)}" target="_blank" rel="noopener">eBay</a>
+      <a class="shop-link bestbuy" href="https://www.bestbuy.com/site/searchpage.jsp?st=${q(item)}" target="_blank" rel="noopener">Best Buy</a>
+    </div>
+  </div>`).join('');
 }
 
-// ── Load all feeds ────────────────────────────────────────────────────────────
+// ── Load all ──────────────────────────────────────────────────────────────────
 
 function loadAllFeeds() {
   loadSection('news-feed', settings.newsTopics, 'news');
@@ -598,15 +482,8 @@ function loadAllFeeds() {
 
 // ── Settings modal ────────────────────────────────────────────────────────────
 
-function openSettings() {
-  syncSettingsUI();
-  document.getElementById('overlay').classList.remove('hidden');
-  document.getElementById('settings-modal').classList.remove('hidden');
-}
-function closeSettings() {
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('settings-modal').classList.add('hidden');
-}
+function openSettings()  { syncSettingsUI(); document.getElementById('overlay').classList.remove('hidden'); document.getElementById('settings-modal').classList.remove('hidden'); }
+function closeSettings() { document.getElementById('overlay').classList.add('hidden'); document.getElementById('settings-modal').classList.add('hidden'); }
 
 function syncSettingsUI() {
   document.getElementById('weather-city-input').value = settings.weatherCity;
@@ -621,137 +498,83 @@ function syncSettingsUI() {
 }
 
 function renderTags(containerId, list, key) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = list.map((item, i) => `
-    <span class="tag">${escHtml(item)}
-      <span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span>
-    </span>`).join('');
-  container.querySelectorAll('.tag-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      settings[btn.dataset.key].splice(parseInt(btn.dataset.index, 10), 1);
-      renderTags(containerId, settings[btn.dataset.key], btn.dataset.key);
-    });
-  });
+  const c=document.getElementById(containerId);
+  c.innerHTML=list.map((item,i)=>`<span class="tag">${escHtml(item)}<span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span></span>`).join('');
+  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); renderTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
 }
 
 function renderContactTags(containerId, list, key) {
-  const container = document.getElementById(containerId);
-  container.innerHTML = list.map((item, i) => `
-    <span class="tag">${escHtml([item.name, item.company].filter(Boolean).join(' · '))}
-      <span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span>
-    </span>`).join('');
-  container.querySelectorAll('.tag-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      settings[btn.dataset.key].splice(parseInt(btn.dataset.index, 10), 1);
-      renderContactTags(containerId, settings[btn.dataset.key], btn.dataset.key);
-    });
-  });
+  const c=document.getElementById(containerId);
+  c.innerHTML=list.map((item,i)=>`<span class="tag">${escHtml([item.name,item.company].filter(Boolean).join(' · '))}<span class="tag-remove" data-key="${key}" data-index="${i}" title="Remove">&#x2715;</span></span>`).join('');
+  c.querySelectorAll('.tag-remove').forEach(btn=>btn.addEventListener('click',()=>{ settings[btn.dataset.key].splice(parseInt(btn.dataset.index,10),1); renderContactTags(containerId,settings[btn.dataset.key],btn.dataset.key); }));
 }
 
 function renderMilestoneTags() {
-  const container = document.getElementById('milestones-tags');
-  container.innerHTML = settings.milestones.map((m, i) => {
-    const yearStr = m.year ? ` (since ${m.year})` : '';
-    const label = `${m.title} · ${MONTH_SHORT[m.month - 1]} ${m.day}${yearStr}`;
-    return `
-      <span class="tag">${escHtml(label)}
-        <span class="tag-remove" data-type="ms" data-index="${i}" title="Remove">&#x2715;</span>
-      </span>`;
+  const c=document.getElementById('milestones-tags');
+  c.innerHTML=settings.milestones.map((m,i)=>{
+    const label=`${m.title} · ${MONTH_SHORT[m.month-1]} ${m.day}${m.year?` (since ${m.year})`:''}`;
+    return `<span class="tag">${escHtml(label)}<span class="tag-remove" data-type="ms" data-index="${i}" title="Remove">&#x2715;</span></span>`;
   }).join('');
-  container.querySelectorAll('.tag-remove[data-type="ms"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      settings.milestones.splice(parseInt(btn.dataset.index, 10), 1);
-      renderMilestoneTags();
-    });
-  });
+  c.querySelectorAll('.tag-remove[data-type="ms"]').forEach(btn=>btn.addEventListener('click',()=>{ settings.milestones.splice(parseInt(btn.dataset.index,10),1); renderMilestoneTags(); }));
 }
 
 function addItem(key, inputId, tagsId) {
-  const input = document.getElementById(inputId);
-  let val = input.value.trim();
-  if (key === 'tickers') val = val.toUpperCase();
-  if (!val) return;
+  const input=document.getElementById(inputId); let val=input.value.trim();
+  if (key==='tickers') val=val.toUpperCase(); if (!val) return;
   if (!settings[key].includes(val)) settings[key].push(val);
-  input.value = '';
-  renderTags(tagsId, settings[key], key);
-  input.focus();
+  input.value=''; renderTags(tagsId,settings[key],key); input.focus();
 }
 
 function addContact(key, nameId, companyId, tagsId) {
-  const name = document.getElementById(nameId).value.trim();
-  const company = document.getElementById(companyId).value.trim();
-  if (!name && !company) return;
-  if (!settings[key].some(e => e.name === name && e.company === company))
-    settings[key].push({ name, company });
-  document.getElementById(nameId).value = '';
-  document.getElementById(companyId).value = '';
-  renderContactTags(tagsId, settings[key], key);
-  document.getElementById(nameId).focus();
+  const name=document.getElementById(nameId).value.trim(), company=document.getElementById(companyId).value.trim();
+  if (!name&&!company) return;
+  if (!settings[key].some(e=>e.name===name&&e.company===company)) settings[key].push({name,company});
+  document.getElementById(nameId).value=''; document.getElementById(companyId).value='';
+  renderContactTags(tagsId,settings[key],key); document.getElementById(nameId).focus();
 }
 
 function addMilestone() {
-  const title = document.getElementById('ms-title').value.trim();
-  const month = parseInt(document.getElementById('ms-month').value, 10);
-  const day   = parseInt(document.getElementById('ms-day').value, 10);
-  const year  = parseInt(document.getElementById('ms-year').value, 10) || null;
-  if (!title || !month || !day || day < 1 || day > 31) return;
-  const isDupe = settings.milestones.some(m => m.title === title && m.month === month && m.day === day);
-  if (!isDupe) settings.milestones.push({ title, month, day, year });
-  document.getElementById('ms-title').value = '';
-  document.getElementById('ms-month').value = '';
-  document.getElementById('ms-day').value = '';
-  document.getElementById('ms-year').value = '';
-  renderMilestoneTags();
-  document.getElementById('ms-title').focus();
+  const title=document.getElementById('ms-title').value.trim();
+  const month=parseInt(document.getElementById('ms-month').value,10);
+  const day=parseInt(document.getElementById('ms-day').value,10);
+  const year=parseInt(document.getElementById('ms-year').value,10)||null;
+  if (!title||!month||!day||day<1||day>31) return;
+  if (!settings.milestones.some(m=>m.title===title&&m.month===month&&m.day===day)) settings.milestones.push({title,month,day,year});
+  document.getElementById('ms-title').value=''; document.getElementById('ms-month').value='';
+  document.getElementById('ms-day').value=''; document.getElementById('ms-year').value='';
+  renderMilestoneTags(); document.getElementById('ms-title').focus();
 }
 
 function wireAddButton(btnId, inputId, tagsId, key) {
-  document.getElementById(btnId).addEventListener('click', () => addItem(key, inputId, tagsId));
-  document.getElementById(inputId).addEventListener('keydown', e => { if (e.key === 'Enter') addItem(key, inputId, tagsId); });
+  document.getElementById(btnId).addEventListener('click',()=>addItem(key,inputId,tagsId));
+  document.getElementById(inputId).addEventListener('keydown',e=>{ if (e.key==='Enter') addItem(key,inputId,tagsId); });
 }
-
 function wireContactAdd(btnId, nameId, companyId, tagsId, key) {
-  document.getElementById(btnId).addEventListener('click', () => addContact(key, nameId, companyId, tagsId));
-  [nameId, companyId].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') addContact(key, nameId, companyId, tagsId); });
-  });
+  document.getElementById(btnId).addEventListener('click',()=>addContact(key,nameId,companyId,tagsId));
+  [nameId,companyId].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if (e.key==='Enter') addContact(key,nameId,companyId,tagsId); }));
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 function init() {
-  updateDateTime();
-  setInterval(updateDateTime, 30000);
+  updateDateTime(); setInterval(updateDateTime,30000);
   loadAllFeeds();
-
-  document.getElementById('settings-btn').addEventListener('click', openSettings);
-  document.getElementById('close-settings').addEventListener('click', closeSettings);
-  document.getElementById('overlay').addEventListener('click', closeSettings);
-
-  document.getElementById('save-city-btn').addEventListener('click', () => {
-    const val = document.getElementById('weather-city-input').value.trim();
-    if (val) settings.weatherCity = val;
-  });
-
-  wireAddButton('add-news-topic-btn', 'news-topic-input', 'news-topics-tags', 'newsTopics');
-  wireAddButton('add-person-btn', 'person-input', 'people-tags', 'people');
-  wireAddButton('add-topic-btn', 'topic-input', 'topics-tags', 'topics');
-  wireAddButton('add-stock-btn', 'stock-input', 'stocks-tags', 'tickers');
-  wireAddButton('add-wishlist-btn', 'wishlist-input', 'wishlist-tags', 'wishlist');
-  wireContactAdd('add-client-btn', 'client-name-input', 'client-company-input', 'clients-tags', 'clients');
-  wireContactAdd('add-prospect-btn', 'prospect-name-input', 'prospect-company-input', 'prospects-tags', 'prospects');
-
-  document.getElementById('add-ms-btn').addEventListener('click', addMilestone);
-  ['ms-title','ms-month','ms-day','ms-year'].forEach(id => {
-    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') addMilestone(); });
-  });
-
-  document.getElementById('apply-btn').addEventListener('click', () => {
-    const cityVal = document.getElementById('weather-city-input').value.trim();
-    if (cityVal) settings.weatherCity = cityVal;
-    persistSettings();
-    closeSettings();
-    loadAllFeeds();
+  document.getElementById('settings-btn').addEventListener('click',openSettings);
+  document.getElementById('close-settings').addEventListener('click',closeSettings);
+  document.getElementById('overlay').addEventListener('click',closeSettings);
+  document.getElementById('save-city-btn').addEventListener('click',()=>{ const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v; });
+  wireAddButton('add-news-topic-btn','news-topic-input','news-topics-tags','newsTopics');
+  wireAddButton('add-person-btn','person-input','people-tags','people');
+  wireAddButton('add-topic-btn','topic-input','topics-tags','topics');
+  wireAddButton('add-stock-btn','stock-input','stocks-tags','tickers');
+  wireAddButton('add-wishlist-btn','wishlist-input','wishlist-tags','wishlist');
+  wireContactAdd('add-client-btn','client-name-input','client-company-input','clients-tags','clients');
+  wireContactAdd('add-prospect-btn','prospect-name-input','prospect-company-input','prospects-tags','prospects');
+  document.getElementById('add-ms-btn').addEventListener('click',addMilestone);
+  ['ms-title','ms-month','ms-day','ms-year'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addMilestone(); }));
+  document.getElementById('apply-btn').addEventListener('click',()=>{
+    const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v;
+    persistSettings(); closeSettings(); loadAllFeeds();
   });
 }
 
