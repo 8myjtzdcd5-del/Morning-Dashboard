@@ -95,6 +95,29 @@ function updateDateTime() {
     ' · ' + now.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
 }
 
+// ── CORS proxy with fallback ──────────────────────────────────────────────────
+
+async function proxyFetch(url, timeout = 12000) {
+  // allorigins returns {contents:"..."} JSON; try it first
+  try {
+    const r = await fetch(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      { signal: AbortSignal.timeout(Math.min(timeout, 9000)) }
+    );
+    if (r.ok) {
+      const data = await r.json();
+      if (data && data.contents) return data.contents;
+    }
+  } catch {}
+  // Fallback: corsproxy.io returns the raw response body
+  const r2 = await fetch(
+    `https://corsproxy.io/?url=${encodeURIComponent(url)}`,
+    { signal: AbortSignal.timeout(timeout) }
+  );
+  if (!r2.ok) throw new Error(`proxy HTTP ${r2.status}`);
+  return r2.text();
+}
+
 // ── Market indices bar ────────────────────────────────────────────────────────
 
 const INDEX_META = [
@@ -117,10 +140,10 @@ async function renderMarketBar() {
   const bar = document.getElementById('market-bar');
   try {
     const symbols = INDEX_META.map(i => i.symbol);
-    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`;
-    const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-      { signal: AbortSignal.timeout(10000) });
-    const { contents } = await resp.json();
+    const qs = `symbols=${symbols.join(',')}&formatted=false`;
+    let contents;
+    try { contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
+    catch { contents = await proxyFetch(`https://query2.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
     const results = JSON.parse(contents)?.quoteResponse?.result || [];
 
     bar.innerHTML = results.map(q => {
@@ -245,11 +268,7 @@ async function renderQuote() {
   const el = document.getElementById('quote-feed');
   el.innerHTML = '<p class="feed-loading">Loading quote&hellip;</p>';
   try {
-    const resp = await fetch(
-      `https://api.allorigins.win/get?url=${encodeURIComponent('https://zenquotes.io/api/today')}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    const { contents } = await resp.json();
+    const contents = await proxyFetch('https://zenquotes.io/api/today', 8000);
     const [q] = JSON.parse(contents);
     el.innerHTML = `
       <div class="quote-card">
@@ -341,9 +360,7 @@ function filterRecent(articles) {
 
 async function fetchNews(query, limit = 8) {
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-  const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`,
-    { signal: AbortSignal.timeout(12000) });
-  const { contents } = await resp.json();
+  const contents = await proxyFetch(rssUrl, 12000);
   const doc = new DOMParser().parseFromString(contents, 'text/xml');
   return Array.from(doc.querySelectorAll('item')).slice(0, limit).map(item => ({
     title: item.querySelector('title')?.textContent ?? '',
@@ -463,10 +480,10 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
 
 async function fetchStocks(symbols) {
   if (!symbols.length) return [];
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols.join(',')}`;
-  const resp = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    { signal: AbortSignal.timeout(10000) });
-  const { contents } = await resp.json();
+  const qs = `symbols=${symbols.join(',')}&formatted=false`;
+  let contents;
+  try { contents = await proxyFetch(`https://query1.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
+  catch { contents = await proxyFetch(`https://query2.finance.yahoo.com/v7/finance/quote?${qs}`, 10000); }
   return (JSON.parse(contents)?.quoteResponse?.result || []).map(q => ({
     symbol: q.symbol, name: q.shortName || q.longName || q.symbol,
     price: q.regularMarketPrice, change: q.regularMarketChange,
