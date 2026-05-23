@@ -604,27 +604,38 @@ function wireTabSwitching(container) {
 function loadContactSection(containerId, entities, prefix, emptyHint) {
   const container=document.getElementById(containerId);
   if (!entities.length) { container.innerHTML=buildEmptyState('Nobody added yet.',emptyHint); return; }
-  // Render immediately from stored history; show placeholder only when no history yet
+  // Show cached cards immediately; use invisible placeholder for contacts with no history yet
   container.innerHTML=entities.map(entity=>{
     const cardId=toCardId(prefix,entity.name+entity.company);
     const history=getHistory(histKey(entity.name,entity.company));
     return history.length
       ? buildContactCard(entity, history, cardId)
-      : `<div class="feed-card contact-card is-loading" id="${cardId}">
-          <div class="feed-card-label"><span class="label-dot"></span>${escHtml(contactLabel(entity))}</div>
-          <p class="feed-loading">Loading&hellip;</p>
-         </div>`;
+      : `<div id="${cardId}" data-placeholder></div>`;
   }).join('');
   wireTabSwitching(container);
   entities.forEach(async entity=>{
     const key=histKey(entity.name,entity.company);
     const cardId=toCardId(prefix,entity.name+entity.company);
-    const query=[entity.name,entity.company].filter(Boolean).map(s=>`"${s}"`).join(' OR ');
     let fresh=[];
-    try { fresh=await fetchNewsQueued(query,20); } catch {}
+    try {
+      const nameQ    = entity.name    ? fetchNewsQueued(`"${entity.name}"`,    15) : Promise.resolve([]);
+      const companyQ = entity.company ? fetchNewsQueued(`"${entity.company}"`, 15) : Promise.resolve([]);
+      const [nameNews, companyNews] = await Promise.all([nameQ, companyQ]);
+      const seen = new Set(nameNews.map(a=>a.link));
+      fresh = [...nameNews, ...companyNews.filter(a=>!seen.has(a.link))]
+        .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+    } catch {}
     const allArticles=mergeHistory(key,fresh);
     const ph=document.getElementById(cardId);
-    if (ph) { const tmp=document.createElement('div'); tmp.innerHTML=buildContactCard(entity,allArticles,cardId); ph.replaceWith(tmp.firstElementChild); }
+    if (!ph) return;
+    if (allArticles.length) {
+      const tmp=document.createElement('div');
+      tmp.innerHTML=buildContactCard(entity,allArticles,cardId);
+      ph.replaceWith(tmp.firstElementChild);
+      wireTabSwitching(container);
+    } else {
+      ph.remove(); // no news found — hide this contact entirely
+    }
   });
 }
 
