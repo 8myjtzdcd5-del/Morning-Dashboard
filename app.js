@@ -411,9 +411,9 @@ function renderMilestones() {
   }
   const thisYear = new Date().getFullYear();
   const enriched = milestones.map(m=>({...m,days:daysUntil(m.month,m.day)})).sort((a,b)=>a.days-b.days);
-  const toShow = enriched.filter(m=>m.days<=7);
+  const toShow = enriched.filter(m=>m.days<=14);
   if (!toShow.length) {
-    el.innerHTML = '<p class="milestone-empty">No special dates in the next 7 days.</p>';
+    el.innerHTML = '<p class="milestone-empty">No special dates in the next 2 weeks.</p>';
     return;
   }
   el.innerHTML = `<div class="milestone-list">${toShow.map(m=>{
