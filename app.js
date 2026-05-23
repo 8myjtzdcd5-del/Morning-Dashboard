@@ -234,10 +234,20 @@ function buildEmptyState(message, hint) {
   return `<div class="feed-empty"><strong>${message}</strong> ${hint}</div>`;
 }
 
+function isToday(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+}
+
 function buildNewsCard(label, items) {
-  const body = (!items || items.length === 0)
-    ? `<p class="feed-loading">No articles found.</p>`
-    : `<ul class="news-list">${items.map(i => articleRow(i)).join('')}</ul>`;
+  const todayItems = (items || []).filter(i => isToday(i.date));
+  const body = todayItems.length === 0
+    ? `<p class="feed-loading">No articles today yet &mdash; check back later.</p>`
+    : `<ul class="news-list">${todayItems.map(i => articleRow(i)).join('')}</ul>`;
   return `
     <div class="feed-card">
       <div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>
