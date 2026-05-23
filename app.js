@@ -381,6 +381,29 @@ function buildNewsCard(label, items) {
   return `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>${body}</div>`;
 }
 
+// Limit concurrent news fetches so rss2json isn't hammered all at once
+const newsQueue = (() => {
+  let running = 0;
+  const MAX = 2;
+  const queue = [];
+  function run() {
+    while (running < MAX && queue.length) {
+      const {fn, resolve, reject} = queue.shift();
+      running++;
+      fn().then(resolve, reject).finally(()=>{ running--; run(); });
+    }
+  }
+  return { add(fn) { return new Promise((res,rej)=>{ queue.push({fn,resolve:res,reject:rej}); run(); }); } };
+})();
+
+async function fetchNewsQueued(query, limit=8) {
+  return newsQueue.add(async ()=>{
+    try { return await fetchNews(query, limit); } catch {}
+    await new Promise(r=>setTimeout(r, 2500));
+    return fetchNews(query, limit);
+  });
+}
+
 function loadSection(containerId, items, prefix) {
   const container = document.getElementById(containerId);
   if (!items.length) { container.innerHTML = buildEmptyState('Nothing here yet.','Open Settings to add some entries.'); return; }
@@ -392,7 +415,7 @@ function loadSection(containerId, items, prefix) {
   items.forEach(async item=>{
     const cardId = toCardId(prefix,item);
     let newsItems=null;
-    try { newsItems=await fetchNews(item); } catch {}
+    try { newsItems=await fetchNewsQueued(item); } catch {}
     const ph=document.getElementById(cardId);
     if (ph) ph.outerHTML=newsItems===null
       ? `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load &mdash; try refreshing.</p></div>`
@@ -451,7 +474,7 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
     const cardId=toCardId(prefix,entity.name+entity.company);
     const query=[entity.name,entity.company].filter(Boolean).map(s=>`"${s}"`).join(' OR ');
     let fresh=[];
-    try { fresh=await fetchNews(query,20); } catch {}
+    try { fresh=await fetchNewsQueued(query,20); } catch {}
     const allArticles=mergeHistory(key,fresh);
     const ph=document.getElementById(cardId);
     if (ph) { const tmp=document.createElement('div'); tmp.innerHTML=buildContactCard(entity,allArticles); ph.replaceWith(tmp.firstElementChild); }
@@ -528,7 +551,7 @@ async function renderF1() {
   const container=document.getElementById('f1-feed');
   container.innerHTML=`<div class="f1-card"><div class="f1-eyebrow"><span class="f1-dot"></span>Formula 1</div><p class="feed-loading">Loading&hellip;</p></div>`;
   let items=[];
-  try { items=await fetchNews('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
+  try { items=await fetchNewsQueued('"Formula 1" OR "Formula One" OR "F1" Grand Prix',15); } catch {}
   const now=Date.now();
   const fresh=items.filter(i=>i.date&&(now-new Date(i.date).getTime())<86400000);
   const stories=(fresh.length>=2?fresh:items).slice(0,2);
