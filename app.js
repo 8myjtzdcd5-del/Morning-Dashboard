@@ -438,6 +438,16 @@ function filterRecent(articles) {
   return articles.filter(a=>a.date&&new Date(a.date).getTime()>cutoff);
 }
 
+// ── News cache ────────────────────────────────────────────────────────────────
+
+function newsKey(q) { return 'mdNC_'+q.toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,60); }
+function saveNewsCache(query, items) {
+  try { localStorage.setItem(newsKey(query), JSON.stringify({items, ts: Date.now()})); } catch {}
+}
+function loadNewsCache(query) {
+  try { return JSON.parse(localStorage.getItem(newsKey(query))||'null'); } catch { return null; }
+}
+
 // ── News fetching ─────────────────────────────────────────────────────────────
 
 function stripHtml(s) { return (s||'').replace(/<[^>]*>/g,'').replace(/&[a-z]+;/gi,' ').replace(/\s+/g,' ').trim(); }
@@ -471,25 +481,25 @@ async function fetchNews(query, limit=8) {
 
 // ── Feed rendering ────────────────────────────────────────────────────────────
 
-function buildNewsCard(label, items) {
+function buildNewsCard(label, items, id='') {
   const todayItems = (items||[]).filter(i=>isToday(i.date));
   const body = todayItems.length===0
     ? `<p class="feed-loading">No articles today yet &mdash; check back later.</p>`
     : `<ul class="news-list">${todayItems.map(i=>articleRow(i)).join('')}</ul>`;
-  return `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>${body}</div>`;
+  return `<div class="feed-card"${id?` id="${escHtml(id)}"`:''}>` +
+    `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(label)}</div>${body}</div>`;
 }
 
-// Limit concurrent news fetches so rss2json isn't hammered all at once
+// One request at a time — multiple concurrent fetches each fire 4 parallel proxy calls,
+// flooding rate limits. Sequential processing is slower but far more reliable.
 const newsQueue = (() => {
   let running = 0;
-  const MAX = 2;
   const queue = [];
   function run() {
-    while (running < MAX && queue.length) {
-      const {fn, resolve, reject} = queue.shift();
-      running++;
-      fn().then(resolve, reject).finally(()=>{ running--; run(); });
-    }
+    if (running > 0 || !queue.length) return;
+    const {fn, resolve, reject} = queue.shift();
+    running = 1;
+    fn().then(resolve, reject).finally(()=>{ running = 0; run(); });
   }
   return { add(fn) { return new Promise((res,rej)=>{ queue.push({fn,resolve:res,reject:rej}); run(); }); } };
 })();
@@ -497,27 +507,40 @@ const newsQueue = (() => {
 async function fetchNewsQueued(query, limit=8) {
   return newsQueue.add(async ()=>{
     try { return await fetchNews(query, limit); } catch {}
-    await new Promise(r=>setTimeout(r, 2500));
-    return fetchNews(query, limit);
+    await new Promise(r=>setTimeout(r, 2000));
+    return fetchNews(query, limit); // throws on second failure — caller handles it
   });
 }
 
 function loadSection(containerId, items, prefix) {
   const container = document.getElementById(containerId);
   if (!items.length) { container.innerHTML = buildEmptyState('Nothing here yet.','Open Settings to add some entries.'); return; }
-  container.innerHTML = items.map(item=>`
-    <div class="feed-card is-loading" id="${toCardId(prefix,item)}">
-      <div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div>
-      <p class="feed-loading">Loading&hellip;</p>
-    </div>`).join('');
+  // Render immediately: cached content where available, loading placeholder otherwise
+  container.innerHTML = items.map(item=>{
+    const cardId = toCardId(prefix, item);
+    const cached = loadNewsCache(item);
+    return cached
+      ? buildNewsCard(item, cached.items, cardId)
+      : `<div class="feed-card is-loading" id="${cardId}"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Loading&hellip;</p></div>`;
+  }).join('');
+  // Fetch fresh data in background — update card on success, keep cache on failure
   items.forEach(async item=>{
-    const cardId = toCardId(prefix,item);
-    let newsItems=null;
-    try { newsItems=await fetchNewsQueued(item); } catch {}
-    const ph=document.getElementById(cardId);
-    if (ph) ph.outerHTML=newsItems===null
-      ? `<div class="feed-card"><div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load &mdash; try refreshing.</p></div>`
-      : buildNewsCard(item,newsItems);
+    const cardId = toCardId(prefix, item);
+    let fresh = null;
+    try { fresh = await fetchNewsQueued(item); } catch {}
+    if (fresh) {
+      saveNewsCache(item, fresh);
+      const el = document.getElementById(cardId);
+      if (el) el.outerHTML = buildNewsCard(item, fresh, cardId);
+    } else {
+      const el = document.getElementById(cardId);
+      if (el && el.classList.contains('is-loading')) {
+        // No cache and fetch failed — show error
+        el.classList.remove('is-loading');
+        el.innerHTML = `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load &mdash; try refreshing.</p>`;
+      }
+      // If card was showing cached content, leave it as-is
+    }
   });
 }
 
