@@ -120,11 +120,17 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 
 .dash-row { display: grid; gap: 20px; align-items: start; }
 
-.dash-row--top      { grid-template-columns: 2fr 1fr; }
-.dash-row--brief    { grid-template-columns: 2fr 1fr; }
-.dash-row--news     { grid-template-columns: repeat(4, 1fr); }
-.dash-row--contacts { grid-template-columns: 1fr 1fr; }
-.dash-row--full     { grid-template-columns: 1fr; }
+.dash-row--top          { grid-template-columns: 2fr 1fr; }
+.dash-row--brief        { grid-template-columns: 2fr 1fr; }
+.dash-row--news-wide    { grid-template-columns: 1fr; }
+.dash-row--news-sub     { grid-template-columns: 1fr 1fr 1.4fr; }
+.dash-row--contacts-wide{ grid-template-columns: 1fr 1fr; }
+.dash-row--full         { grid-template-columns: 1fr; }
+
+/* News topic cards flow horizontally across the full width */
+.dash-row--news-wide .feed-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); }
+/* Contact cards also flow horizontally within each column */
+.dash-row--contacts-wide .feed-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 
 /* ── Weather ─────────────────────────────────────────── */
 
@@ -298,6 +304,8 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 /* ── Loading / empty states ──────────────────────────── */
 
 .feed-loading { color: var(--text-muted); font-size: 0.82rem; font-style: italic; }
+.retry-btn { background: none; border: 1px solid var(--text-muted); border-radius: 4px; color: var(--text-muted); cursor: pointer; font-size: 0.78rem; padding: 1px 7px; margin-left: 6px; font-style: normal; }
+.retry-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 .feed-card.is-loading .feed-loading { animation: pulse 1.5s ease-in-out infinite; }
@@ -525,16 +533,14 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 
 /* ── Responsive ──────────────────────────────────────── */
 
-@media (max-width: 1200px) {
-  .dash-row--news { grid-template-columns: 1fr 1fr; }
-}
-
 @media (max-width: 860px) {
-  .dash-row--top, .dash-row--brief, .dash-row--contacts { grid-template-columns: 1fr; }
+  .dash-row--top, .dash-row--brief { grid-template-columns: 1fr; }
+  .dash-row--news-sub { grid-template-columns: 1fr 1fr; }
+  .dash-row--contacts-wide { grid-template-columns: 1fr; }
 }
 
-@media (max-width: 720px) {
-  .dash-row--news { grid-template-columns: 1fr; }
+@media (max-width: 600px) {
+  .dash-row--news-sub { grid-template-columns: 1fr; }
   .weather-card { flex-direction: column; gap: 14px; }
   .weather-temp { font-size: 2.8rem; }
   .market-inner { padding: 8px 16px; }

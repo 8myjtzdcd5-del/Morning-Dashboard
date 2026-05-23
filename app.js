@@ -545,9 +545,15 @@ function loadSection(containerId, items, prefix) {
     } else {
       const el = document.getElementById(cardId);
       if (el && el.classList.contains('is-loading')) {
-        // No cache and fetch failed — show error
         el.classList.remove('is-loading');
-        el.innerHTML = `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load &mdash; try refreshing.</p>`;
+        const retryId = `retry-${cardId}`;
+        el.innerHTML = `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Could not load. <button class="retry-btn" id="${retryId}">↻ Retry</button></p>`;
+        document.getElementById(retryId)?.addEventListener('click', ()=>{
+          el.classList.add('is-loading');
+          el.innerHTML = `<div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Loading&hellip;</p>`;
+          fetchNewsQueued(item).then(fresh=>{ if(fresh){saveNewsCache(item,fresh); el.outerHTML=buildNewsCard(item,fresh,cardId);} })
+            .catch(()=>{ el.classList.remove('is-loading'); el.innerHTML=`<div class="feed-card-label"><span class="label-dot"></span>${escHtml(item)}</div><p class="feed-loading">Still unavailable. Try again later.</p>`; });
+        });
       }
       // If card was showing cached content, leave it as-is
     }
