@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Morning Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+
+    <header class="header">
+      <div class="header-inner">
+        <div class="header-left">
+          <h1 id="greeting">Good Morning</h1>
+          <p id="datetime" class="datetime"></p>
+        </div>
+        <button id="settings-btn" class="settings-btn">&#9881; Settings</button>
+      </div>
+    </header>
+
+    <main class="main">
+
+      <section class="weather-section">
+        <div id="weather-content" class="weather-loading">Loading weather&hellip;</div>
+      </section>
+
+      <section class="feed-section">
+        <h2 class="section-title">News Topics</h2>
+        <div id="news-feed" class="feed-grid"></div>
+      </section>
+
+      <section class="feed-section">
+        <h2 class="section-title">People of Interest</h2>
+        <div id="people-feed" class="feed-grid"></div>
+      </section>
+
+      <section class="feed-section">
+        <h2 class="section-title">Topics of Interest</h2>
+        <div id="topics-feed" class="feed-grid"></div>
+      </section>
+
+    </main>
+
+    <div id="overlay" class="overlay hidden"></div>
+
+    <div id="settings-modal" class="modal hidden">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button id="close-settings" class="close-btn" aria-label="Close">&#x2715;</button>
+      </div>
+      <div class="modal-body">
+
+        <div class="setting-group">
+          <label class="setting-label">Weather City</label>
+          <div class="input-row">
+            <input type="text" id="weather-city-input" placeholder="e.g. New York" autocomplete="off">
+            <button id="save-city-btn" class="btn-primary">Save</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">News Topics</label>
+          <p class="setting-hint">Broad categories you follow (e.g. Technology, Sports)</p>
+          <div class="input-row">
+            <input type="text" id="news-topic-input" placeholder="e.g. Technology" autocomplete="off">
+            <button id="add-news-topic-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="news-topics-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">People of Interest</label>
+          <p class="setting-hint">Specific people you want to track news about</p>
+          <div class="input-row">
+            <input type="text" id="person-input" placeholder="e.g. Elon Musk" autocomplete="off">
+            <button id="add-person-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="people-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Topics of Interest</label>
+          <p class="setting-hint">Specific topics or queries you want to follow</p>
+          <div class="input-row">
+            <input type="text" id="topic-input" placeholder="e.g. Electric vehicles" autocomplete="off">
+            <button id="add-topic-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="topics-tags" class="tags"></div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button id="apply-btn" class="btn-primary btn-large">Apply &amp; Refresh</button>
+      </div>
+    </div>
+
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
