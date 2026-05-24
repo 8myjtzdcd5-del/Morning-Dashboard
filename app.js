@@ -736,7 +736,7 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
   container.innerHTML=entities.map(entity=>{
     const cardId=toCardId(prefix,entity.name+entity.company);
     const history=getHistory(histKey(entity.name,entity.company));
-    return history.length
+    return filterRecent(history).length
       ? buildContactCard(entity, history, cardId)
       : `<div id="${cardId}" data-placeholder></div>`;
   }).join('');
@@ -758,7 +758,7 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
     const allArticles=mergeHistory(key,fresh);
     const ph=document.getElementById(cardId);
     if (!ph) return;
-    if (allArticles.length) {
+    if (filterRecent(allArticles).length) {
       const tmp=document.createElement('div');
       tmp.innerHTML=buildContactCard(entity,allArticles,cardId);
       ph.replaceWith(tmp.firstElementChild);
