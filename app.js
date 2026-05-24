@@ -741,7 +741,8 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
       : `<div id="${cardId}" data-placeholder></div>`;
   }).join('');
   wireTabSwitching(container);
-  entities.forEach(async entity=>{
+  const hasCards = () => !!container.querySelector('.feed-card');
+  Promise.all(entities.map(async entity=>{
     const key=histKey(entity.name,entity.company);
     const cardId=toCardId(prefix,entity.name+entity.company);
     let fresh=[];
@@ -764,8 +765,10 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
       ph.replaceWith(tmp.firstElementChild);
       wireTabSwitching(container);
     } else {
-      ph.remove(); // no news found — hide this contact entirely
+      ph.remove();
     }
+  })).then(()=>{
+    if (!hasCards()) container.innerHTML=buildEmptyState('No recent news.','Check back later for updates.');
   });
 }
 
