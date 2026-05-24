@@ -402,16 +402,50 @@ function daysUntil(month, day) {
   return Math.round((target-today)/86400000);
 }
 
+function nthWeekday(year, month, weekday, n) {
+  // n=1 first, n=-1 last. weekday: 0=Sun,1=Mon,...
+  if (n > 0) {
+    const d = new Date(year, month-1, 1);
+    const diff = (weekday - d.getDay() + 7) % 7;
+    return new Date(year, month-1, 1 + diff + (n-1)*7);
+  } else {
+    const d = new Date(year, month, 0); // last day of month
+    const diff = (d.getDay() - weekday + 7) % 7;
+    return new Date(year, month-1, d.getDate() - diff);
+  }
+}
+
+function getHolidays(year) {
+  const h = (title, emoji, m, d) => ({ title: `${emoji} ${title}`, month: m, day: d, isHoliday: true });
+  const hd = (title, emoji, date) => h(title, emoji, date.getMonth()+1, date.getDate());
+  return [
+    h("New Year's Day",        '🎆', 1,  1),
+    h("Valentine's Day",       '❤️',  2, 14),
+    h("St. Patrick's Day",     '🍀', 3, 17),
+    h("Independence Day",      '🇺🇸', 7,  4),
+    h("Halloween",             '🎃', 10, 31),
+    h("Veterans Day",          '🎖️', 11, 11),
+    h("Christmas Eve",         '🎄', 12, 24),
+    h("Christmas Day",         '🎁', 12, 25),
+    h("New Year's Eve",        '🥂', 12, 31),
+    hd("Martin Luther King Jr. Day", '✊', nthWeekday(year, 1, 1, 3)),
+    hd("Presidents' Day",      '🏛️',  nthWeekday(year, 2, 1, 3)),
+    hd("Mother's Day",         '💐',  nthWeekday(year, 5, 0, 2)),
+    hd("Memorial Day",         '🕊️',  nthWeekday(year, 5, 1, -1)),
+    hd("Father's Day",         '👔',  nthWeekday(year, 6, 0, 3)),
+    hd("Labor Day",            '⚒️',  nthWeekday(year, 9, 1, 1)),
+    hd("Columbus Day",         '⚓',  nthWeekday(year, 10, 1, 2)),
+    hd("Thanksgiving",         '🦃',  nthWeekday(year, 11, 4, 4)),
+  ];
+}
+
 function renderMilestones() {
   const el = document.getElementById('milestones-feed');
-  const {milestones} = settings;
-  if (!milestones.length) {
-    el.innerHTML = '<p class="milestone-empty">No special dates added yet. Open Settings to add birthdays, anniversaries, and more.</p>';
-    return;
-  }
   const thisYear = new Date().getFullYear();
-  const enriched = milestones.map(m=>({...m,days:daysUntil(m.month,m.day)})).sort((a,b)=>a.days-b.days);
-  const toShow = enriched.filter(m=>m.days<=14);
+  const holidays = getHolidays(thisYear).map(h=>({...h, days:daysUntil(h.month,h.day)}));
+  const personal = settings.milestones.map(m=>({...m, days:daysUntil(m.month,m.day)}));
+  const all = [...personal, ...holidays].sort((a,b)=>a.days-b.days);
+  const toShow = all.filter(m=>m.days<=14);
   if (!toShow.length) {
     el.innerHTML = '<p class="milestone-empty">No special dates in the next 2 weeks.</p>';
     return;
@@ -419,8 +453,8 @@ function renderMilestones() {
   el.innerHTML = `<div class="milestone-list">${toShow.map(m=>{
     const today2=m.days===0, soon=m.days<=7&&m.days>1;
     const when = today2?'&#x1F382; Today!':m.days===1?'Tomorrow':`In ${m.days} days`;
-    const yrs = m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
-    return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''}">
+    const yrs = !m.isHoliday&&m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
+    return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''} ${m.isHoliday?'is-holiday':''}">
       <div><div class="milestone-title">${escHtml(m.title)}</div>${yrs?`<div class="milestone-years">${yrs}</div>`:''}</div>
       <div class="milestone-when">${when}<br><span style="opacity:0.7">${MONTH_SHORT[m.month-1]} ${m.day}</span></div>
     </div>`;
