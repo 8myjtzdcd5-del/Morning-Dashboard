@@ -396,22 +396,24 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 
 /* ── Stock grid ──────────────────────────────────────── */
 
-.stocks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.stocks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
 
 .stock-card {
   background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 13px 15px;
+  padding: 16px 18px;
   box-shadow: var(--shadow);
   border: 1px solid var(--border);
-  border-left: 4px solid var(--border);
+  border-left: 5px solid var(--border);
 }
-.stock-card.up   { border-left-color: var(--green); }
-.stock-card.down { border-left-color: var(--red); }
-.stock-symbol { font-size: 0.9rem; font-weight: 700; }
-.stock-name { font-size: 0.7rem; color: var(--text-muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.stock-price { font-size: 1.25rem; font-weight: 800; margin-top: 7px; letter-spacing: -0.02em; color: #1d4ed8; }
-.stock-change { font-size: 0.77rem; font-weight: 600; margin-top: 2px; }
+.stock-card.up   { border-left-color: var(--green); background: #f0fdf4; }
+.stock-card.down { border-left-color: var(--red);   background: #fff5f5; }
+.stock-symbol { font-size: 1.05rem; font-weight: 800; letter-spacing: 0.01em; }
+.stock-name { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stock-price { font-size: 1.6rem; font-weight: 800; margin-top: 10px; letter-spacing: -0.03em; }
+.stock-card.up   .stock-price { color: var(--green); }
+.stock-card.down .stock-price { color: var(--red); }
+.stock-change { font-size: 0.85rem; font-weight: 700; margin-top: 3px; }
 .stock-card.up   .stock-change { color: var(--green); }
 .stock-card.down .stock-change { color: var(--red); }
 .stock-time { font-size: 0.63rem; color: var(--text-muted); margin-top: 4px; }
