@@ -25,8 +25,8 @@ const DEFAULTS = {
   newsTopics: ['Technology','Science','Business'],
   people: [], topics: [], clients: [], prospects: [],
   tickers: [], wishlist: [],
-  milestones: [],
-  calendarUrls: [],
+  milestones: [], calendarUrls: [],
+  gmailScriptUrl: '',
   refreshTimes: ['5:16 AM','11:30 AM','3:00 PM','7:30 PM'],
 };
 
@@ -392,6 +392,47 @@ async function renderQuote() {
     saveCache('mdQuoteCache', q);
     el.innerHTML = buildQuoteHtml(q);
   } catch { if (!cached) el.innerHTML='<p class="feed-loading">Quote unavailable today.</p>'; }
+}
+
+// ── Gmail summary ─────────────────────────────────────────────────────────────
+
+async function renderGmail() {
+  const el = document.getElementById('gmail-feed');
+  if (!el) return;
+  const url = settings.gmailScriptUrl;
+  if (!url) { el.innerHTML = buildEmptyState('Gmail not connected.','Open Settings and add your Gmail Script URL.'); return; }
+
+  const cached = loadCache('mdGmailCache');
+  if (cached) el.innerHTML = buildGmailHtml(cached.data);
+  else el.innerHTML = '<p class="feed-loading">Loading emails&hellip;</p>';
+
+  try {
+    const r = await fetch(url, { signal: sig(12000) });
+    const data = await r.json();
+    if (!data.ok || !data.emails) throw new Error('bad response');
+    saveCache('mdGmailCache', data.emails);
+    el.innerHTML = buildGmailHtml(data.emails);
+  } catch {
+    if (!cached) el.innerHTML = '<p class="feed-loading">Could not load emails. Check the Script URL in Settings.</p>';
+  }
+}
+
+function buildGmailHtml(emails) {
+  if (!emails?.length) return '<p class="feed-loading">No unread emails in the last 48 hours.</p>';
+  return emails.map(e => {
+    const d = new Date(e.date);
+    const timeStr = d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    const dateStr = isToday(e.date) ? timeStr : d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const link = `https://mail.google.com/mail/u/0/#inbox/${e.id}`;
+    return `<a class="gmail-row" href="${link}" target="_blank" rel="noopener">
+      <div class="gmail-meta">
+        <span class="gmail-from">${e.starred?'⭐ ':''}${escHtml(e.from)}</span>
+        <span class="gmail-date">${dateStr}</span>
+      </div>
+      <div class="gmail-subject">${escHtml(e.subject)}</div>
+      ${e.snippet ? `<div class="gmail-snippet">${escHtml(e.snippet.slice(0,120))}…</div>` : ''}
+    </a>`;
+  }).join('');
 }
 
 // ── Google Calendar ICS ───────────────────────────────────────────────────────
@@ -901,6 +942,7 @@ function loadAllFeeds(staggerMs=0) {
   renderWishlist(settings.wishlist);
   renderMilestones();
   renderQuote();
+  renderGmail();
   renderMarketBar();
   renderWeather(settings.weatherCity);
 
@@ -991,6 +1033,7 @@ function syncSettingsUI() {
   renderTags('wishlist-tags', settings.wishlist, 'wishlist');
   renderMilestoneTags();
   renderTags('calendar-url-tags', settings.calendarUrls, 'calendarUrls');
+  document.getElementById('gmail-script-url-input').value = settings.gmailScriptUrl || '';
 }
 
 function renderTags(containerId, list, key) {
@@ -1191,6 +1234,11 @@ function init() {
     }
   });
   ['ms-title','ms-month','ms-day','ms-year'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addMilestone(); }));
+  document.getElementById('save-gmail-url-btn').addEventListener('click', () => {
+    const v = document.getElementById('gmail-script-url-input').value.trim();
+    settings.gmailScriptUrl = v;
+    persistSettings();
+  });
   document.getElementById('export-settings-btn').addEventListener('click', exportSettings);
   document.getElementById('import-settings-input').addEventListener('change', e => importSettings(e.target.files[0]));
   document.getElementById('connect-gist-btn').addEventListener('click', () => {

@@ -84,7 +84,15 @@
         </section>
       </div>
 
-      <!-- Row 4: Wish List -->
+      <!-- Row 4: Gmail -->
+      <div class="dash-row dash-row--full">
+        <section class="feed-section">
+          <h2 class="section-title">&#x2709; Unread Emails</h2>
+          <div id="gmail-feed" class="gmail-feed"></div>
+        </section>
+      </div>
+
+      <!-- Row 5: Wish List -->
       <div class="dash-row dash-row--full">
         <section class="feed-section">
           <h2 class="section-title">Wish List</h2>
@@ -213,6 +221,18 @@
           </div>
           <div id="calendar-url-tags" class="tags"></div>
         </div>
+
+        <div class="setting-group">
+          <label class="setting-label">&#x2709; Gmail Unread Emails</label>
+          <p class="setting-hint">Paste your Google Apps Script web app URL to show important unread emails. See the included <strong>gmail-script.js</strong> file in the repo for setup instructions.</p>
+          <div class="input-row">
+            <input type="text" id="gmail-script-url-input" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off">
+            <button id="save-gmail-url-btn" class="btn-primary">Save</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Wish List</label>
           <p class="setting-hint">Add items you want to buy &mdash; we&rsquo;ll link you straight to search results at major stores.</p>
           <div class="input-row">
             <input type="text" id="wishlist-input" placeholder="e.g. Sony WH-1000XM5 headphones" autocomplete="off">

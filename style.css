@@ -427,6 +427,35 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .market-clickable { cursor: pointer; transition: background 0.12s; border-radius: 6px; padding: 4px 6px; margin: -4px -6px; }
 .market-clickable:hover { background: rgba(255,255,255,0.1); }
 
+/* ── Gmail feed ──────────────────────────────────────────── */
+
+.gmail-feed { display: flex; flex-direction: column; gap: 2px; }
+
+.gmail-row {
+  display: block;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.12s, box-shadow 0.12s;
+}
+.gmail-row:hover { background: var(--accent-light); box-shadow: var(--shadow); }
+
+.gmail-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 3px;
+}
+.gmail-from    { font-size: 0.82rem; font-weight: 700; color: var(--text); }
+.gmail-date    { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.gmail-subject { font-size: 0.88rem; font-weight: 600; color: var(--text); }
+.gmail-snippet { font-size: 0.76rem; color: var(--text-muted); margin-top: 3px; line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* ── Chart modal ─────────────────────────────────────────── */
 .chart-modal { width: min(95vw, 1000px); max-height: 90vh; display: flex; flex-direction: column; }
 .chart-range-bar {
