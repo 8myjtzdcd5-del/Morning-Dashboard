@@ -205,7 +205,14 @@
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">Wish List</label>
+          <label class="setting-label">&#x1F4C5; Google Calendar Sync</label>
+          <p class="setting-hint">Paste your Google Calendar secret iCal link to automatically show birthdays, anniversaries, and events in Special Dates. In Google Calendar (web) go to Settings &rarr; click a calendar &rarr; scroll to &ldquo;Integrate calendar&rdquo; &rarr; copy the <strong>Secret address in iCal format</strong>.</p>
+          <div class="input-row">
+            <input type="text" id="calendar-url-input" placeholder="https://calendar.google.com/calendar/ical/…" autocomplete="off">
+            <button id="add-calendar-url-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="calendar-url-tags" class="tags"></div>
+        </div>
           <p class="setting-hint">Add items you want to buy &mdash; we&rsquo;ll link you straight to search results at major stores.</p>
           <div class="input-row">
             <input type="text" id="wishlist-input" placeholder="e.g. Sony WH-1000XM5 headphones" autocomplete="off">

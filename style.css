@@ -272,7 +272,8 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .milestone-item.is-today .milestone-title { color: var(--accent-dark); }
 .milestone-item.is-today .milestone-when  { color: #f59e0b; font-weight: 700; }
 .milestone-item.is-soon  .milestone-when  { color: var(--accent); }
-.milestone-item.is-holiday .milestone-title { color: var(--text-muted); font-weight: 500; }
+.milestone-item.is-holiday  .milestone-title { color: var(--text-muted); font-weight: 500; }
+.milestone-item.is-calendar .milestone-title { color: #7c3aed; }
 
 .milestone-empty { color: var(--text-muted); font-size: 0.84rem; font-style: italic; }
 

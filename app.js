@@ -26,6 +26,7 @@ const DEFAULTS = {
   people: [], topics: [], clients: [], prospects: [],
   tickers: [], wishlist: [],
   milestones: [],
+  calendarUrls: [],
   refreshTimes: ['5:16 AM','11:30 AM','3:00 PM','7:30 PM'],
 };
 
@@ -393,6 +394,48 @@ async function renderQuote() {
   } catch { if (!cached) el.innerHTML='<p class="feed-loading">Quote unavailable today.</p>'; }
 }
 
+// ── Google Calendar ICS ───────────────────────────────────────────────────────
+
+function parseIcs(text) {
+  // Unfold continuation lines (ICS wraps long lines with \r\n + space)
+  const unfolded = text.replace(/\r\n[ \t]/g,'').replace(/\r\n/g,'\n').replace(/\n[ \t]/g,'');
+  const events = [];
+  const blocks = unfolded.split('BEGIN:VEVENT').slice(1);
+  for (const block of blocks) {
+    const get = key => block.match(new RegExp(`${key}[^:\\n]*:([^\\n]+)`))?.[1]?.trim() ?? null;
+    const summary  = get('SUMMARY');
+    const dtstartRaw = get('DTSTART');
+    if (!summary || !dtstartRaw) continue;
+    const dateOnly = dtstartRaw.replace(/T.*/, '');
+    if (dateOnly.length < 8) continue;
+    const isAllDay = !dtstartRaw.includes('T');
+    if (!isAllDay) continue; // skip timed appointments — only all-day events are special dates
+    const month = parseInt(dateOnly.slice(4,6), 10);
+    const day   = parseInt(dateOnly.slice(6,8), 10);
+    if (!month || !day) continue;
+    events.push({ title: summary, month, day, isCalendar: true });
+  }
+  return events;
+}
+
+async function fetchCalendarEvents(url) {
+  try {
+    const text = await proxyFetch(url, 12000);
+    return parseIcs(text);
+  } catch { return []; }
+}
+
+async function loadAllCalendarEvents() {
+  const urls = settings.calendarUrls || [];
+  if (!urls.length) return loadCache('mdCalCache')?.data || [];
+  const cached = loadCache('mdCalCache');
+  // Use cache immediately while fetching fresh in background
+  const results = await Promise.all(urls.map(u => fetchCalendarEvents(u)));
+  const all = results.flat();
+  if (all.length) saveCache('mdCalCache', all);
+  return all.length ? all : (cached?.data || []);
+}
+
 // ── Special Dates ─────────────────────────────────────────────────────────────
 
 function daysUntil(month, day) {
@@ -439,12 +482,13 @@ function getHolidays(year) {
   ];
 }
 
-function renderMilestones() {
+function buildMilestonesHtml(calEvents) {
   const el = document.getElementById('milestones-feed');
   const thisYear = new Date().getFullYear();
   const holidays = getHolidays(thisYear).map(h=>({...h, days:daysUntil(h.month,h.day)}));
   const personal = settings.milestones.map(m=>({...m, days:daysUntil(m.month,m.day)}));
-  const all = [...personal, ...holidays].sort((a,b)=>a.days-b.days);
+  const calendar = (calEvents||[]).map(e=>({...e, days:daysUntil(e.month,e.day)}));
+  const all = [...personal, ...calendar, ...holidays].sort((a,b)=>a.days-b.days);
   const toShow = all.filter(m=>m.days<=14);
   if (!toShow.length) {
     el.innerHTML = '<p class="milestone-empty">No special dates in the next 2 weeks.</p>';
@@ -453,12 +497,21 @@ function renderMilestones() {
   el.innerHTML = `<div class="milestone-list">${toShow.map(m=>{
     const today2=m.days===0, soon=m.days<=7&&m.days>1;
     const when = today2?'&#x1F382; Today!':m.days===1?'Tomorrow':`In ${m.days} days`;
-    const yrs = !m.isHoliday&&m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
-    return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''} ${m.isHoliday?'is-holiday':''}">
+    const yrs = !m.isHoliday&&!m.isCalendar&&m.year&&(thisYear-m.year)>0 ? `${thisYear-m.year} year${thisYear-m.year>1?'s':''}` : null;
+    return `<div class="milestone-item ${today2?'is-today':soon?'is-soon':''} ${m.isHoliday?'is-holiday':''} ${m.isCalendar?'is-calendar':''}">
       <div><div class="milestone-title">${escHtml(m.title)}</div>${yrs?`<div class="milestone-years">${yrs}</div>`:''}</div>
       <div class="milestone-when">${when}<br><span style="opacity:0.7">${MONTH_SHORT[m.month-1]} ${m.day}</span></div>
     </div>`;
   }).join('')}</div>`;
+}
+
+async function renderMilestones() {
+  const cached = loadCache('mdCalCache');
+  buildMilestonesHtml(cached?.data || []);
+  if (settings.calendarUrls?.length) {
+    const fresh = await loadAllCalendarEvents();
+    buildMilestonesHtml(fresh);
+  }
 }
 
 // ── History storage ───────────────────────────────────────────────────────────
@@ -937,6 +990,7 @@ function syncSettingsUI() {
   renderTags('stocks-tags', settings.tickers, 'tickers');
   renderTags('wishlist-tags', settings.wishlist, 'wishlist');
   renderMilestoneTags();
+  renderTags('calendar-url-tags', settings.calendarUrls, 'calendarUrls');
 }
 
 function renderTags(containerId, list, key) {
@@ -1126,6 +1180,16 @@ function init() {
   wireContactAdd('add-client-btn','client-name-input','client-company-input','clients-tags','clients');
   wireContactAdd('add-prospect-btn','prospect-name-input','prospect-company-input','prospects-tags','prospects');
   document.getElementById('add-ms-btn').addEventListener('click',addMilestone);
+  document.getElementById('add-calendar-url-btn').addEventListener('click', () => {
+    const input = document.getElementById('calendar-url-input');
+    const url = input.value.trim();
+    if (url && url.startsWith('http') && !settings.calendarUrls.includes(url)) {
+      settings.calendarUrls.push(url);
+      persistSettings();
+      renderTags('calendar-url-tags', settings.calendarUrls, 'calendarUrls');
+      input.value = '';
+    }
+  });
   ['ms-title','ms-month','ms-day','ms-year'].forEach(id=>document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter') addMilestone(); }));
   document.getElementById('export-settings-btn').addEventListener('click', exportSettings);
   document.getElementById('import-settings-input').addEventListener('change', e => importSettings(e.target.files[0]));
