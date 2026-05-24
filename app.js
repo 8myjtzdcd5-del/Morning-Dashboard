@@ -477,12 +477,12 @@ async function fetchNews(query, limit=8) {
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
   const viaRss2json = fetch(
     `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
-    {signal: sig(15000)}
+    {signal: sig(7000)}
   ).then(r=>r.json()).then(data=>{
     if (data.status!=='ok'||!data.items?.length) throw new Error('rss2json empty');
     return data.items.map(i=>({title:i.title||'',link:i.link||'#',date:i.pubDate||'',source:i.author||'',description:stripHtml(i.description||'')}));
   });
-  const viaProxy = proxyFetch(rssUrl, 15000).then(xml=>parseXmlItems(xml, limit));
+  const viaProxy = proxyFetch(rssUrl, 8000).then(xml=>parseXmlItems(xml, limit));
   return Promise.any([viaRss2json, viaProxy]);
 }
 
@@ -501,7 +501,7 @@ function buildNewsCard(label, items, id='') {
 const newsQueue = (() => {
   let running = false;
   let lastDone = 0;
-  const GAP = 1200; // ms between requests — prevents back-to-back proxy hammering
+  const GAP = 700; // ms between requests — prevents back-to-back proxy hammering
   const queue = [];
   function run() {
     if (running || !queue.length) return;
@@ -518,9 +518,9 @@ const newsQueue = (() => {
 
 async function fetchNewsQueued(query, limit=8) {
   return newsQueue.add(async ()=>{
-    for (let attempt=0; attempt<3; attempt++) {
+    for (let attempt=0; attempt<2; attempt++) {
       try { return await fetchNews(query, limit); } catch {}
-      if (attempt < 2) await new Promise(r=>setTimeout(r, 2000 * (attempt+1)));
+      if (attempt < 1) await new Promise(r=>setTimeout(r, 1500));
     }
     throw new Error('all attempts failed');
   });
@@ -618,12 +618,14 @@ function loadContactSection(containerId, entities, prefix, emptyHint) {
     const cardId=toCardId(prefix,entity.name+entity.company);
     let fresh=[];
     try {
-      const nameQ    = entity.name    ? fetchNewsQueued(`"${entity.name}"`,    15) : Promise.resolve([]);
-      const companyQ = entity.company ? fetchNewsQueued(`"${entity.company}"`, 15) : Promise.resolve([]);
-      const [nameNews, companyNews] = await Promise.all([nameQ, companyQ]);
-      const seen = new Set(nameNews.map(a=>a.link));
-      fresh = [...nameNews, ...companyNews.filter(a=>!seen.has(a.link))]
-        .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+      // Single queue slot: fetch name then company sequentially inside one item
+      fresh = await newsQueue.add(async ()=>{
+        const nameNews    = entity.name    ? await fetchNews(`"${entity.name}"`,    12).catch(()=>[]) : [];
+        const companyNews = entity.company ? await fetchNews(`"${entity.company}"`, 12).catch(()=>[]) : [];
+        const seen = new Set(nameNews.map(a=>a.link));
+        return [...nameNews, ...companyNews.filter(a=>!seen.has(a.link))]
+          .sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+      });
     } catch {}
     const allArticles=mergeHistory(key,fresh);
     const ph=document.getElementById(cardId);
