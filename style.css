@@ -490,6 +490,154 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .tag-remove { cursor: pointer; opacity: 0.5; font-size: 0.8rem; line-height: 1; transition: opacity 0.15s; user-select: none; }
 .tag-remove:hover { opacity: 1; }
 
+/* ── Board of Directors ──────────────────────────────── */
+
+.header-right { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+
+.board-btn {
+  flex-shrink: 0;
+  background: rgba(251,191,36,0.15);
+  border: 1px solid rgba(251,191,36,0.4);
+  color: #fbbf24;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  transition: background 0.18s;
+}
+.board-btn:hover { background: rgba(251,191,36,0.28); }
+
+.board-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 210;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.board-modal-header {
+  background: linear-gradient(135deg, var(--header-from) 0%, var(--header-to) 100%);
+  color: #fff;
+  padding: 18px 28px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.board-modal-title      { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; color: #fbbf24; }
+.board-modal-subtitle   { font-size: 0.78rem; opacity: 0.55; margin-top: 2px; }
+.close-btn--board       { color: rgba(255,255,255,0.65); font-size: 1.2rem; padding: 6px 8px; }
+.close-btn--board:hover { color: #fff; background: rgba(255,255,255,0.12); }
+
+.board-question-bar {
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  padding: 14px 28px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.board-question-bar input {
+  flex: 1;
+  padding: 11px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+}
+.board-question-bar input:focus { border-color: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.15); }
+.btn-ask          { background: #d97706; font-size: 0.9rem; padding: 10px 22px; }
+.btn-ask:hover    { background: #b45309; }
+.btn-ask:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.board-results { flex: 1; overflow-y: auto; padding: 24px 28px 40px; }
+
+.board-empty-state { text-align: center; padding: 80px 20px; }
+.board-empty-icon  { font-size: 2.5rem; color: #d97706; opacity: 0.35; margin-bottom: 16px; }
+.board-empty-title { font-size: 1rem; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
+.board-empty-hint  { font-size: 0.84rem; color: var(--text-muted); max-width: 400px; margin: 0 auto; line-height: 1.6; }
+
+.board-question-echo {
+  font-size: 1rem;
+  font-style: italic;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.board-members-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.board-member-card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.board-member-card--done  { border-color: #d1fae5; }
+.board-member-card--error { border-color: #fee2e2; }
+
+.board-member-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.board-member-avatar {
+  width: 42px; height: 42px; border-radius: 50%; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 700; flex-shrink: 0; letter-spacing: 0.03em;
+}
+.board-member-info  { flex: 1; min-width: 0; }
+.board-member-name  { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+.board-member-title { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; line-height: 1.4; }
+
+.board-member-status {
+  width: 9px; height: 9px; border-radius: 50%; background: #f59e0b;
+  flex-shrink: 0; margin-top: 5px;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.board-member-status--done  { background: var(--green); animation: none; }
+.board-member-status--error { background: var(--red);   animation: none; }
+
+.board-member-response {
+  font-size: 0.85rem; line-height: 1.65; color: var(--text);
+  border-top: 1px solid var(--border); padding-top: 11px; white-space: pre-wrap;
+}
+.board-typing { color: var(--text-muted); font-style: italic; font-size: 0.82rem; animation: pulse 1.5s ease-in-out infinite; }
+
+.board-summary-card {
+  background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+  color: #fff; border-radius: var(--radius); padding: 26px 30px; box-shadow: var(--shadow-lg);
+}
+.board-summary-card--loading .board-summary-body { opacity: 0.7; }
+.board-summary-head {
+  font-size: 0.65rem; font-weight: 800; text-transform: uppercase;
+  letter-spacing: 0.12em; color: #fbbf24; margin-bottom: 14px;
+}
+.board-summary-body { font-size: 0.93rem; line-height: 1.75; color: rgba(255,255,255,0.88); white-space: pre-wrap; }
+
+.setting-group--divider { border-top: 2px solid var(--border); padding-top: 20px; margin-top: 4px; }
+.board-model-row { display: flex; align-items: center; gap: 14px; margin-top: 10px; flex-wrap: wrap; }
+.board-model-label { font-size: 0.82rem; color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.board-model-note { font-size: 0.72rem; color: var(--text-muted); }
+
 /* ── Responsive ──────────────────────────────────────── */
 
 @media (max-width: 1200px) {
@@ -507,4 +655,9 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
   .market-inner { padding: 8px 16px; }
   .main { padding: 16px 16px 40px; }
   .header-inner { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .board-question-bar { padding: 12px 16px; }
+  .board-results { padding: 16px 16px 32px; }
+  .board-modal-header { padding: 14px 16px; }
+  .board-members-grid { grid-template-columns: 1fr; }
+  .board-summary-card { padding: 20px; }
 }

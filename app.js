@@ -7,6 +7,29 @@ const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+const DEFAULT_BOARD = [
+  {name:'Warren Buffett',      title:'Chairman & CEO, Berkshire Hathaway'},
+  {name:'Oprah Winfrey',       title:'Media Executive & Philanthropist'},
+  {name:'Steve Jobs',          title:'Co-founder & CEO, Apple (1976–2011)'},
+  {name:'Marcus Aurelius',     title:'Roman Emperor & Stoic Philosopher (121–180 AD)'},
+  {name:'Maya Angelou',        title:'Poet, Author & Civil Rights Activist'},
+  {name:'Elon Musk',           title:'CEO, Tesla & SpaceX'},
+  {name:'Jeff Bezos',          title:'Founder & Executive Chairman, Amazon'},
+  {name:'Michelle Obama',      title:'Former First Lady of the United States'},
+  {name:'Winston Churchill',   title:'Prime Minister of the United Kingdom (1940–45, 1951–55)'},
+  {name:'Marie Curie',         title:'Physicist & Chemist, Two-time Nobel Laureate'},
+  {name:'Abraham Lincoln',     title:'16th President of the United States'},
+  {name:'Brené Brown',         title:'Research Professor; Author on Vulnerability & Leadership'},
+  {name:'Peter Drucker',       title:'Author & Educator; Father of Modern Management'},
+  {name:'Sheryl Sandberg',     title:'Former COO, Meta; Author of Lean In'},
+  {name:'Benjamin Franklin',   title:'Founding Father, Inventor & Statesman'},
+  {name:'Nelson Mandela',      title:'Former President of South Africa & Anti-Apartheid Leader'},
+  {name:'Bill Gates',          title:'Co-founder, Microsoft; Co-chair, Gates Foundation'},
+  {name:'Indra Nooyi',         title:'Former CEO, PepsiCo (2006–2018)'},
+  {name:'Naval Ravikant',      title:'Co-founder, AngelList; Angel Investor & Philosopher'},
+  {name:'Ruth Bader Ginsburg', title:'Associate Justice, U.S. Supreme Court (1993–2020)'},
+];
+
 const WMO = {
   0:'Clear sky',1:'Mainly clear',2:'Partly cloudy',3:'Overcast',
   45:'Fog',48:'Icy fog',51:'Light drizzle',53:'Drizzle',55:'Heavy drizzle',
@@ -26,6 +49,9 @@ const DEFAULTS = {
   people: [], topics: [], clients: [], prospects: [],
   tickers: [], wishlist: [],
   milestones: [],
+  boardMembers: DEFAULT_BOARD.map(m => ({...m})),
+  claudeApiKey: '',
+  boardModel: 'claude-haiku-4-5-20251001',
 };
 
 let settings = loadSettings();
@@ -496,6 +522,238 @@ function renderWishlist(items) {
   </div>`).join('');
 }
 
+// ── Board of Directors ────────────────────────────────────────────────────────
+
+function memberHue(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+  return h % 360;
+}
+
+function memberInitials(name) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function openBoardRoom() {
+  document.getElementById('board-modal').classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+  document.getElementById('board-question-input').focus();
+}
+
+function closeBoardRoom() {
+  document.getElementById('board-modal').classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+async function streamClaudeSSE(apiKey, model, systemPrompt, userPrompt, onChunk, maxTokens = 600) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      stream: true,
+      system: systemPrompt,
+      messages: [{role: 'user', content: userPrompt}],
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API error ${resp.status}`);
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const {done, value} = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, {stream: true});
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      const data = line.slice(6).trim();
+      if (data === '[DONE]') return;
+      try {
+        const evt = JSON.parse(data);
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+          onChunk(evt.delta.text);
+        }
+      } catch {}
+    }
+  }
+}
+
+function createMemberCard(member) {
+  const hue = memberHue(member.name);
+  const card = document.createElement('div');
+  card.className = 'board-member-card board-member-card--loading';
+  card.innerHTML = `
+    <div class="board-member-head">
+      <div class="board-member-avatar" style="background:hsl(${hue},52%,40%)">${escHtml(memberInitials(member.name))}</div>
+      <div class="board-member-info">
+        <div class="board-member-name">${escHtml(member.name)}</div>
+        <div class="board-member-title">${escHtml(member.title)}</div>
+      </div>
+      <div class="board-member-status"></div>
+    </div>
+    <div class="board-member-response"><span class="board-typing">Thinking&hellip;</span></div>`;
+  return card;
+}
+
+function memberSystemPrompt(member) {
+  return `You are channeling ${member.name} — ${member.title} — for a personal advisory thought experiment. Based on everything documented about ${member.name}: their writings, speeches, interviews, philosophy, values, decision-making frameworks, and personality, answer the user's question exactly as ${member.name} authentically would. Speak in their distinctive voice and style. Use their characteristic frameworks, vocabulary, and perspective. If they would challenge the premise of the question, do so in their way. Reflect their real views faithfully — do not dilute them to be generic or safe. Do not open your response with "As ${member.name}..." — speak directly in the first person as them. Respond in 2–3 paragraphs.`;
+}
+
+async function askBoard(question) {
+  const apiKey = (settings.claudeApiKey || '').trim();
+  const model = settings.boardModel || 'claude-haiku-4-5-20251001';
+  const members = settings.boardMembers || [];
+
+  if (!apiKey) {
+    alert('Please add your Anthropic API key in Settings under "Board of Directors."');
+    return;
+  }
+  if (!members.length) {
+    alert('No board members found. Open Settings to add some.');
+    return;
+  }
+
+  const askBtn = document.getElementById('board-ask-btn');
+  askBtn.disabled = true;
+  askBtn.textContent = 'Asking…';
+
+  const resultsEl = document.getElementById('board-results');
+  const emptyState = document.getElementById('board-empty-state');
+  if (emptyState) emptyState.remove();
+  resultsEl.innerHTML = '';
+
+  const questionEl = document.createElement('div');
+  questionEl.className = 'board-question-echo';
+  questionEl.textContent = `"${question}"`;
+  resultsEl.appendChild(questionEl);
+
+  const grid = document.createElement('div');
+  grid.className = 'board-members-grid';
+  resultsEl.appendChild(grid);
+
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'board-summary-card board-summary-card--loading';
+  summaryCard.innerHTML = `
+    <div class="board-summary-head">Board Summary</div>
+    <div class="board-summary-body" id="board-summary-body"><span class="board-typing">Waiting for all advisors&hellip;</span></div>`;
+  resultsEl.appendChild(summaryCard);
+
+  const cardData = members.map(member => {
+    const card = createMemberCard(member);
+    grid.appendChild(card);
+    return {member, card};
+  });
+
+  const responses = {};
+  await Promise.all(cardData.map(async ({member, card}) => {
+    const responseEl = card.querySelector('.board-member-response');
+    const statusEl   = card.querySelector('.board-member-status');
+    let text = '';
+    try {
+      await streamClaudeSSE(apiKey, model, memberSystemPrompt(member), question, chunk => {
+        if (!text) responseEl.innerHTML = '';
+        text += chunk;
+        responseEl.textContent = text;
+      });
+      responses[member.name] = text;
+      card.classList.remove('board-member-card--loading');
+      card.classList.add('board-member-card--done');
+      statusEl.classList.add('board-member-status--done');
+    } catch (err) {
+      card.classList.remove('board-member-card--loading');
+      card.classList.add('board-member-card--error');
+      statusEl.classList.add('board-member-status--error');
+      responseEl.textContent = `Could not reach this advisor: ${err.message}`;
+      responses[member.name] = null;
+    }
+  }));
+
+  summaryCard.classList.remove('board-summary-card--loading');
+  const summaryBody = document.getElementById('board-summary-body');
+  const valid = Object.entries(responses).filter(([, t]) => t);
+
+  if (!valid.length) {
+    summaryBody.textContent = 'No responses received. Please check your API key in Settings.';
+    askBtn.disabled = false; askBtn.textContent = 'Ask Board';
+    return;
+  }
+
+  const responseBlock = valid.map(([name, t]) => `${name}:\n${t}`).join('\n\n---\n\n');
+  const summaryUserPrompt = `The following advisors responded to this question: "${question}"\n\n${responseBlock}\n\n---\n\nWrite a 4–5 paragraph synthesis addressed directly to the person who asked ("you"). Cover: the strongest points of agreement, the most meaningful differences in perspective, any surprising or counterintuitive viewpoints, and the most actionable guidance overall. Close with a clear, honest bottom line. Be specific — not vague.`;
+  const summarySystemPrompt = `You synthesize advice from a personal board of directors. Write a genuinely useful distillation — not a recap of who said what, but a clear, actionable synthesis the person can act on.`;
+
+  let summaryText = '';
+  summaryBody.innerHTML = '<span class="board-typing">Writing synthesis&hellip;</span>';
+  try {
+    await streamClaudeSSE(apiKey, model, summarySystemPrompt, summaryUserPrompt, chunk => {
+      if (!summaryText) summaryBody.innerHTML = '';
+      summaryText += chunk;
+      summaryBody.textContent = summaryText;
+    }, 1200);
+    summaryCard.classList.add('board-summary-card--done');
+  } catch (err) {
+    summaryBody.textContent = `Summary error: ${err.message}`;
+  }
+
+  askBtn.disabled = false;
+  askBtn.textContent = 'Ask Board';
+}
+
+// ── Board settings UI ─────────────────────────────────────────────────────────
+
+function renderBoardTags() {
+  const c = document.getElementById('board-tags');
+  const members = settings.boardMembers || [];
+  c.innerHTML = members.map((m, i) =>
+    `<span class="tag">${escHtml(m.name)}<span class="tag-remove" data-type="board" data-index="${i}" title="Remove">&#x2715;</span></span>`
+  ).join('');
+  c.querySelectorAll('.tag-remove[data-type="board"]').forEach(btn =>
+    btn.addEventListener('click', () => {
+      settings.boardMembers.splice(parseInt(btn.dataset.index, 10), 1);
+      renderBoardTags();
+    })
+  );
+}
+
+function addBoardMember() {
+  const nameInput  = document.getElementById('board-name-input');
+  const titleInput = document.getElementById('board-title-input');
+  const name  = nameInput.value.trim();
+  const title = titleInput.value.trim();
+  if (!name) return;
+  if (!settings.boardMembers) settings.boardMembers = [];
+  if (!settings.boardMembers.some(m => m.name === name)) {
+    settings.boardMembers.push({name, title});
+  }
+  nameInput.value = ''; titleInput.value = '';
+  renderBoardTags();
+  nameInput.focus();
+}
+
+function syncBoardSettingsUI() {
+  const keyInput = document.getElementById('claude-api-key-input');
+  if (keyInput) keyInput.value = settings.claudeApiKey || '';
+  const model = settings.boardModel || 'claude-haiku-4-5-20251001';
+  const haiku  = document.getElementById('model-haiku');
+  const sonnet = document.getElementById('model-sonnet');
+  if (haiku)  haiku.checked  = model === 'claude-haiku-4-5-20251001';
+  if (sonnet) sonnet.checked = model === 'claude-sonnet-4-6';
+  renderBoardTags();
+}
+
 // ── Load all ──────────────────────────────────────────────────────────────────
 
 function loadAllFeeds() {
@@ -528,6 +786,7 @@ function syncSettingsUI() {
   renderTags('stocks-tags', settings.tickers, 'tickers');
   renderTags('wishlist-tags', settings.wishlist, 'wishlist');
   renderMilestoneTags();
+  syncBoardSettingsUI();
 }
 
 function renderTags(containerId, list, key) {
@@ -641,6 +900,31 @@ function init() {
     const v=document.getElementById('weather-city-input').value.trim(); if(v) settings.weatherCity=v;
     persistSettings(); closeSettings(); loadAllFeeds();
   });
+
+  // Board Room
+  document.getElementById('board-btn').addEventListener('click', openBoardRoom);
+  document.getElementById('close-board').addEventListener('click', closeBoardRoom);
+
+  const boardQuestionInput = document.getElementById('board-question-input');
+  const boardAskBtn = document.getElementById('board-ask-btn');
+  function triggerAskBoard() {
+    const q = boardQuestionInput.value.trim();
+    if (!q || boardAskBtn.disabled) return;
+    askBoard(q);
+  }
+  boardAskBtn.addEventListener('click', triggerAskBoard);
+  boardQuestionInput.addEventListener('keydown', e => { if (e.key === 'Enter') triggerAskBoard(); });
+
+  document.getElementById('save-api-key-btn').addEventListener('click', () => {
+    settings.claudeApiKey = document.getElementById('claude-api-key-input').value.trim();
+  });
+  document.querySelectorAll('input[name="board-model"]').forEach(radio =>
+    radio.addEventListener('change', e => { settings.boardModel = e.target.value; })
+  );
+  document.getElementById('add-board-btn').addEventListener('click', addBoardMember);
+  ['board-name-input','board-title-input'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') addBoardMember(); })
+  );
 }
 
 init();

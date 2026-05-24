@@ -15,7 +15,10 @@
           <h1 id="greeting">Good Morning</h1>
           <p id="datetime" class="datetime"></p>
         </div>
-        <button id="settings-btn" class="settings-btn">&#9881; Settings</button>
+        <div class="header-right">
+          <button id="board-btn" class="board-btn">&#9670; Board Room</button>
+          <button id="settings-btn" class="settings-btn">&#9881; Settings</button>
+        </div>
       </div>
     </header>
 
@@ -91,6 +94,27 @@
       </div>
 
     </main>
+
+    <div id="board-modal" class="board-modal hidden">
+      <div class="board-modal-header">
+        <div class="board-modal-title-group">
+          <h2 class="board-modal-title">&#9670; Board of Directors</h2>
+          <p class="board-modal-subtitle">Your personal advisory council</p>
+        </div>
+        <button id="close-board" class="close-btn close-btn--board" aria-label="Close">&#x2715;</button>
+      </div>
+      <div class="board-question-bar">
+        <input type="text" id="board-question-input" placeholder="Ask your board a question&hellip;" autocomplete="off">
+        <button id="board-ask-btn" class="btn-primary btn-ask">Ask Board</button>
+      </div>
+      <div class="board-results" id="board-results">
+        <div class="board-empty-state" id="board-empty-state">
+          <div class="board-empty-icon">&#9670;</div>
+          <p class="board-empty-title">Ready for your question</p>
+          <p class="board-empty-hint">Type a question above and your board will each respond based on their documented philosophy, voice, and perspective.</p>
+        </div>
+      </div>
+    </div>
 
     <div id="overlay" class="overlay hidden"></div>
 
@@ -191,6 +215,31 @@
             <button id="add-wishlist-btn" class="btn-primary">Add</button>
           </div>
           <div id="wishlist-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group setting-group--divider">
+          <label class="setting-label">Board of Directors &mdash; API Key</label>
+          <p class="setting-hint">Your Anthropic (Claude) API key. Stored locally on this device only.</p>
+          <div class="input-row">
+            <input type="password" id="claude-api-key-input" placeholder="sk-ant-&hellip;" autocomplete="off">
+            <button id="save-api-key-btn" class="btn-primary">Save</button>
+          </div>
+          <div class="board-model-row">
+            <span class="setting-hint" style="margin:0;flex-shrink:0">Model:</span>
+            <label class="board-model-label"><input type="radio" name="board-model" value="claude-haiku-4-5-20251001" id="model-haiku"> Haiku <span class="board-model-note">(fast)</span></label>
+            <label class="board-model-label"><input type="radio" name="board-model" value="claude-sonnet-4-6" id="model-sonnet"> Sonnet <span class="board-model-note">(higher quality)</span></label>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">Board Members</label>
+          <p class="setting-hint">20 advisors are pre-loaded. Add more or remove any. Each needs a name and a brief description.</p>
+          <div class="contact-input-row">
+            <input type="text" id="board-name-input" placeholder="Name" autocomplete="off">
+            <input type="text" id="board-title-input" placeholder="Title or description" autocomplete="off">
+            <button id="add-board-btn" class="btn-primary">Add</button>
+          </div>
+          <div id="board-tags" class="tags"></div>
         </div>
 
         <div class="setting-group">
