@@ -11,10 +11,11 @@ A personal morning briefing page — plain HTML/CSS/JS, no framework, no build s
 ## Files
 
 | File | Purpose |
-|------|---------|
+|------|-------|
 | `index.html` | All markup — header, market bar, dashboard rows, settings modal, chart modal |
 | `app.js` | All logic — fetching, rendering, settings, caching, queue, sync |
 | `style.css` | All styles — layout, cards, responsive |
+| `gmail-script.js` | Paste into script.google.com to enable Gmail unread emails section |
 
 No dependencies, no npm, no bundler. Edit and push — it's live.
 
@@ -29,6 +30,7 @@ No dependencies, no npm, no bundler. Edit and push — it's live.
 - **News Topics** — full-width horizontal card grid
 - **People of Interest / Topics of Interest / F1** — 3-column row; F1 shows next race + news digest
 - **Client News / Prospect News** — side-by-side, each contact gets its own card with tabs
+- **Unread Emails** — Gmail section via Google Apps Script web app URL
 - **Wish List** — items with store search links
 
 ---
@@ -48,6 +50,8 @@ Settings are stored in `localStorage` under the key `morningDashboard`. Shape:
   prospects: [{ name: "Bob Jones", company: "Globex" }],
   milestones: [{ title: "Mom's Birthday", month: 6, day: 15, year: 1950 }],
   wishlist: ["Sony WH-1000XM5"],
+  calendarUrls: ["https://calendar.google.com/calendar/ical/..."],
+  gmailScriptUrl: "https://script.google.com/macros/s/.../exec",
   refreshTimes: ["5:16 AM", "11:30 AM", "3 PM"],
 }
 ```
@@ -65,7 +69,7 @@ Cloud sync: user connects a GitHub PAT with `gist` scope; settings are saved as 
 Every section caches to localStorage so content shows instantly on reload even if fetches fail.
 
 | Cache key | Content |
-|-----------|---------|
+|-----------|-------|
 | `mdWeatherCache` | Weather data |
 | `mdQuoteCache` | Quote of the day |
 | `mdF1Cache` | F1 news items |
@@ -74,6 +78,8 @@ Every section caches to localStorage so content shows instantly on reload even i
 | `mdStockCache` | Stock prices |
 | `mdNC_<slug>` | News articles per topic/person/topic query |
 | `mdHist_<slug>` | Article history per client/prospect (kept 30 days) |
+| `mdCalCache` | Google Calendar ICS events |
+| `mdGmailCache` | Gmail unread emails |
 
 Helpers: `saveCache(key, data)` / `loadCache(key)` for simple objects.  
 `saveNewsCache(query, items)` / `loadNewsCache(query)` for news topic caches.
@@ -105,6 +111,9 @@ loadContactSection(containerId, entities, prefix, emptyHint)
 // Renders client/prospect cards. One queue slot per contact fetches both name news and company news.
 // Hides contacts that have no news at all (no cache, no fresh results).
 
+renderGmail()
+// Fetches from Google Apps Script URL, displays unread emails sorted starred→important→newest.
+
 loadAllFeeds(staggerMs)
 // Calls all section renderers. Pass staggerMs>0 (e.g. 15*60*1000) on scheduled refresh
 // to spread fetches over 15 minutes instead of firing all at once.
@@ -132,21 +141,19 @@ Uses Yahoo Finance (query1/query2 direct + proxy fallback, racing with `Promise.
 
 ## Special Dates
 
-Shows only dates within the next **14 days**. Calculates years elapsed if a start year was provided.
+Shows only dates within the next **14 days**. Merges: personal milestones + US holidays (computed) + Google Calendar ICS events. Calculates years elapsed if a start year was provided.
 
 ---
 
 ## Layout (CSS grid)
 
 ```css
-.dash-row--full           /* 1 column — stocks, news topics, wish list */
+.dash-row--full           /* 1 column — stocks, news topics, gmail, wish list */
 .dash-row--brief          /* 2fr 1fr — quote + special dates */
 .dash-row--news-wide      /* 1fr — news topics full width */
 .dash-row--news-sub       /* 1fr 1fr 1.4fr — people / topics / F1 */
 .dash-row--contacts-wide  /* 1fr 1fr — clients / prospects */
 ```
-
-News cards inside `--news-wide` and `--contacts-wide` use `repeat(auto-fill, minmax(...))` to flow horizontally.
 
 ---
 
