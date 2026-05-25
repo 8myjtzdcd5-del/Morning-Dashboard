@@ -49,14 +49,24 @@ const DEFAULTS = {
   people: [], topics: [], clients: [], prospects: [],
   tickers: [], wishlist: [],
   milestones: [],
-  boardMembers: DEFAULT_BOARD.map(m => ({...m})),
+  inspirationBoard: DEFAULT_BOARD.map(m => ({...m})),
+  blindSpotBoard: [],
   claudeApiKey: '',
   boardModel: 'claude-haiku-4-5-20251001',
 };
 
 let settings = loadSettings();
 function loadSettings() {
-  try { const r = localStorage.getItem('morningDashboard'); return r ? {...DEFAULTS,...JSON.parse(r)} : {...DEFAULTS}; }
+  try {
+    const r = localStorage.getItem('morningDashboard');
+    if (!r) return {...DEFAULTS};
+    const parsed = JSON.parse(r);
+    if (parsed.boardMembers && !parsed.inspirationBoard) {
+      parsed.inspirationBoard = parsed.boardMembers;
+      delete parsed.boardMembers;
+    }
+    return {...DEFAULTS, ...parsed};
+  }
   catch { return {...DEFAULTS}; }
 }
 function persistSettings() { localStorage.setItem('morningDashboard', JSON.stringify(settings)); }
@@ -547,6 +557,14 @@ function closeBoardRoom() {
   document.body.style.overflow = '';
 }
 
+function switchBoardTab(tab) {
+  document.querySelectorAll('.board-tab-btn').forEach(btn =>
+    btn.classList.toggle('board-tab-btn--active', btn.dataset.tab === tab)
+  );
+  document.querySelectorAll('.board-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById(`board-panel-${tab}`).classList.remove('hidden');
+}
+
 async function streamClaudeSSE(apiKey, model, systemPrompt, userPrompt, onChunk, maxTokens = 600) {
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -557,9 +575,7 @@ async function streamClaudeSSE(apiKey, model, systemPrompt, userPrompt, onChunk,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model,
-      max_tokens: maxTokens,
-      stream: true,
+      model, max_tokens: maxTokens, stream: true,
       system: systemPrompt,
       messages: [{role: 'user', content: userPrompt}],
     }),
@@ -583,18 +599,26 @@ async function streamClaudeSSE(apiKey, model, systemPrompt, userPrompt, onChunk,
       if (data === '[DONE]') return;
       try {
         const evt = JSON.parse(data);
-        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
-          onChunk(evt.delta.text);
-        }
+        if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') onChunk(evt.delta.text);
       } catch {}
     }
   }
+}
+
+function memberSystemPrompt(member) {
+  return `You are channeling ${member.name} — ${member.title} — for a personal advisory thought experiment. Based on everything documented about ${member.name}: their writings, speeches, interviews, philosophy, values, decision-making frameworks, and personality, respond exactly as ${member.name} authentically would. Speak in their distinctive voice and style, using their characteristic frameworks and vocabulary. If they would challenge the premise, do so in their way. Do not open with "As ${member.name}..." — speak directly in the first person.`;
+}
+
+function buildMemberUserPrompt(question, myAnswer) {
+  if (!myAnswer) return question;
+  return `I'm considering this question: ${question}\n\nMy current thinking is:\n"${myAnswer}"\n\nPlease respond in 3 paragraphs: (1) What you find wise or insightful in my thinking, (2) What concerns you or seems unwise or incomplete, (3) What important perspective I might be missing — then share your own take on the question.`;
 }
 
 function createMemberCard(member) {
   const hue = memberHue(member.name);
   const card = document.createElement('div');
   card.className = 'board-member-card board-member-card--loading';
+  card.dataset.memberName = member.name;
   card.innerHTML = `
     <div class="board-member-head">
       <div class="board-member-avatar" style="background:hsl(${hue},52%,40%)">${escHtml(memberInitials(member.name))}</div>
@@ -604,66 +628,74 @@ function createMemberCard(member) {
       </div>
       <div class="board-member-status"></div>
     </div>
-    <div class="board-member-response"><span class="board-typing">Thinking&hellip;</span></div>`;
+    <div class="board-member-response"><span class="board-typing">Thinking…</span></div>`;
   return card;
 }
 
-function memberSystemPrompt(member) {
-  return `You are channeling ${member.name} — ${member.title} — for a personal advisory thought experiment. Based on everything documented about ${member.name}: their writings, speeches, interviews, philosophy, values, decision-making frameworks, and personality, answer the user's question exactly as ${member.name} authentically would. Speak in their distinctive voice and style. Use their characteristic frameworks, vocabulary, and perspective. If they would challenge the premise of the question, do so in their way. Reflect their real views faithfully — do not dilute them to be generic or safe. Do not open your response with "As ${member.name}..." — speak directly in the first person as them. Respond in 2–3 paragraphs.`;
+function initBoardPanel(boardType, question, myAnswer, members) {
+  const panel = document.getElementById(`board-panel-${boardType}`);
+  const isInspiration = boardType === 'inspiration';
+  const colorClass = isInspiration ? 'gold' : 'purple';
+  const icon = isInspiration ? '&#9733;' : '&#9671;';
+  const boardName = isInspiration ? 'My Inspiration Board' : 'My Blind Spot Board';
+
+  if (!members.length) {
+    panel.innerHTML = `<div class="bpe bpe--${colorClass}">
+      <div class="bpe-icon">${icon}</div>
+      <p class="bpe-title">${boardName}</p>
+      <p class="bpe-hint">No members yet. Open Settings to add some.</p>
+    </div>`;
+    return;
+  }
+
+  panel.innerHTML = `
+    <div class="board-question-echo">&ldquo;${escHtml(question)}&rdquo;</div>
+    ${myAnswer ? `<div class="board-my-answer-echo"><strong>Your thinking:</strong> ${escHtml(myAnswer)}</div>` : ''}
+    <div class="board-members-grid" id="grid-${boardType}"></div>
+    <div class="board-summary-card board-summary-card--${colorClass} board-summary-card--loading" id="summary-${boardType}">
+      <div class="board-summary-head">${boardName} — Summary</div>
+      <div class="board-summary-body" id="summary-body-${boardType}"><span class="board-typing">Waiting for all advisors…</span></div>
+    </div>`;
+
+  const grid = document.getElementById(`grid-${boardType}`);
+  members.forEach(member => grid.appendChild(createMemberCard(member)));
 }
 
-async function askBoard(question) {
-  const apiKey = (settings.claudeApiKey || '').trim();
-  const model = settings.boardModel || 'claude-haiku-4-5-20251001';
-  const members = settings.boardMembers || [];
+function initComparePanel(question, myAnswer) {
+  const panel = document.getElementById('board-panel-compare');
+  panel.innerHTML = `
+    <div class="board-question-echo">&ldquo;${escHtml(question)}&rdquo;</div>
+    ${myAnswer ? `<div class="board-my-answer-echo"><strong>Your thinking:</strong> ${escHtml(myAnswer)}</div>` : ''}
+    <div class="board-compare-cols">
+      <div class="board-compare-col board-compare-col--inspiration">
+        <div class="board-compare-col-head"><span class="btab-dot btab-dot--gold"></span>My Inspiration Board</div>
+        <div class="board-compare-col-body" id="compare-body-inspiration"><span class="board-typing">Waiting…</span></div>
+      </div>
+      <div class="board-compare-col board-compare-col--blindspot">
+        <div class="board-compare-col-head"><span class="btab-dot btab-dot--purple"></span>My Blind Spot Board</div>
+        <div class="board-compare-col-body" id="compare-body-blindspot"><span class="board-typing">Waiting…</span></div>
+      </div>
+    </div>
+    <div class="board-conclusion-card board-conclusion-card--loading" id="board-conclusion-card">
+      <div class="board-conclusion-head">&#9889; Cross-Board Conclusion</div>
+      <div class="board-conclusion-subhead">Common ground &bull; Key tensions &bull; How to discuss both</div>
+      <div class="board-conclusion-body" id="board-conclusion-body"><span class="board-typing">Waiting for both boards…</span></div>
+    </div>`;
+}
 
-  if (!apiKey) {
-    alert('Please add your Anthropic API key in Settings under "Board of Directors."');
-    return;
-  }
-  if (!members.length) {
-    alert('No board members found. Open Settings to add some.');
-    return;
-  }
-
-  const askBtn = document.getElementById('board-ask-btn');
-  askBtn.disabled = true;
-  askBtn.textContent = 'Asking…';
-
-  const resultsEl = document.getElementById('board-results');
-  const emptyState = document.getElementById('board-empty-state');
-  if (emptyState) emptyState.remove();
-  resultsEl.innerHTML = '';
-
-  const questionEl = document.createElement('div');
-  questionEl.className = 'board-question-echo';
-  questionEl.textContent = `"${question}"`;
-  resultsEl.appendChild(questionEl);
-
-  const grid = document.createElement('div');
-  grid.className = 'board-members-grid';
-  resultsEl.appendChild(grid);
-
-  const summaryCard = document.createElement('div');
-  summaryCard.className = 'board-summary-card board-summary-card--loading';
-  summaryCard.innerHTML = `
-    <div class="board-summary-head">Board Summary</div>
-    <div class="board-summary-body" id="board-summary-body"><span class="board-typing">Waiting for all advisors&hellip;</span></div>`;
-  resultsEl.appendChild(summaryCard);
-
-  const cardData = members.map(member => {
-    const card = createMemberCard(member);
-    grid.appendChild(card);
-    return {member, card};
-  });
-
+async function streamBoardMembers(boardType, members, question, myAnswer, apiKey, model) {
   const responses = {};
-  await Promise.all(cardData.map(async ({member, card}) => {
+  const grid = document.getElementById(`grid-${boardType}`);
+  if (!grid) return responses;
+
+  await Promise.all(members.map(async member => {
+    const card = grid.querySelector(`[data-member-name="${CSS.escape(member.name)}"]`);
+    if (!card) return;
     const responseEl = card.querySelector('.board-member-response');
     const statusEl   = card.querySelector('.board-member-status');
     let text = '';
     try {
-      await streamClaudeSSE(apiKey, model, memberSystemPrompt(member), question, chunk => {
+      await streamClaudeSSE(apiKey, model, memberSystemPrompt(member), buildMemberUserPrompt(question, myAnswer), chunk => {
         if (!text) responseEl.innerHTML = '';
         text += chunk;
         responseEl.textContent = text;
@@ -680,66 +712,159 @@ async function askBoard(question) {
       responses[member.name] = null;
     }
   }));
+  return responses;
+}
 
-  summaryCard.classList.remove('board-summary-card--loading');
-  const summaryBody = document.getElementById('board-summary-body');
+async function generateBoardSummary(boardType, question, myAnswer, responses, apiKey, model) {
+  const summaryCardEl = document.getElementById(`summary-${boardType}`);
+  const summaryBodyEl = document.getElementById(`summary-body-${boardType}`);
+  const compareBodyEl = document.getElementById(`compare-body-${boardType}`);
+  if (summaryCardEl) summaryCardEl.classList.remove('board-summary-card--loading');
+
   const valid = Object.entries(responses).filter(([, t]) => t);
-
   if (!valid.length) {
-    summaryBody.textContent = 'No responses received. Please check your API key in Settings.';
-    askBtn.disabled = false; askBtn.textContent = 'Ask Board';
-    return;
+    const msg = 'No responses received.';
+    if (summaryBodyEl) summaryBodyEl.textContent = msg;
+    if (compareBodyEl) compareBodyEl.textContent = msg;
+    return '';
   }
 
+  const isInspiration = boardType === 'inspiration';
+  const boardName = isInspiration ? 'Inspiration Board' : 'Blind Spot Board';
+  const boardDesc = isInspiration ? 'advisors whose views the questioner admires' : 'advisors with different views from the questioner';
   const responseBlock = valid.map(([name, t]) => `${name}:\n${t}`).join('\n\n---\n\n');
-  const summaryUserPrompt = `The following advisors responded to this question: "${question}"\n\n${responseBlock}\n\n---\n\nWrite a 4–5 paragraph synthesis addressed directly to the person who asked ("you"). Cover: the strongest points of agreement, the most meaningful differences in perspective, any surprising or counterintuitive viewpoints, and the most actionable guidance overall. Close with a clear, honest bottom line. Be specific — not vague.`;
-  const summarySystemPrompt = `You synthesize advice from a personal board of directors. Write a genuinely useful distillation — not a recap of who said what, but a clear, actionable synthesis the person can act on.`;
 
-  let summaryText = '';
-  summaryBody.innerHTML = '<span class="board-typing">Writing synthesis&hellip;</span>';
+  let userPrompt = `Your ${boardName} — ${boardDesc} — responded to: "${question}"\n\n${responseBlock}\n\n`;
+  if (myAnswer) userPrompt += `The questioner's current thinking: "${myAnswer}"\n\n`;
+  userPrompt += isInspiration
+    ? `Write a 3-paragraph synthesis. Cover the key themes, note interesting differences within this board, and distill the most actionable guidance. Speak directly to the questioner ("you").`
+    : `Write a 3-paragraph synthesis. These advisors hold different views. Focus on what they see differently, what the questioner may be underestimating or missing, and where they push back most strongly. Be direct, not diplomatic. Speak directly to the questioner ("you").`;
+
+  const sysPrompt = isInspiration
+    ? 'You synthesize advice from a personal inspiration board into a clear, actionable summary.'
+    : 'You synthesize perspectives from a blind spot advisory board — people with fundamentally different views — into an honest summary of what they see differently.';
+
+  if (summaryBodyEl) summaryBodyEl.innerHTML = '<span class="board-typing">Writing summary…</span>';
+  if (compareBodyEl) compareBodyEl.innerHTML = '<span class="board-typing">Writing summary…</span>';
+  let text = '';
+
   try {
-    await streamClaudeSSE(apiKey, model, summarySystemPrompt, summaryUserPrompt, chunk => {
-      if (!summaryText) summaryBody.innerHTML = '';
-      summaryText += chunk;
-      summaryBody.textContent = summaryText;
-    }, 1200);
-    summaryCard.classList.add('board-summary-card--done');
+    await streamClaudeSSE(apiKey, model, sysPrompt, userPrompt, chunk => {
+      if (!text) {
+        if (summaryBodyEl) summaryBodyEl.innerHTML = '';
+        if (compareBodyEl) compareBodyEl.innerHTML = '';
+      }
+      text += chunk;
+      if (summaryBodyEl) summaryBodyEl.textContent = text;
+      if (compareBodyEl) compareBodyEl.textContent = text;
+    }, 800);
+    if (summaryCardEl) summaryCardEl.classList.add('board-summary-card--done');
+    return text;
   } catch (err) {
-    summaryBody.textContent = `Summary error: ${err.message}`;
+    const msg = `Summary error: ${err.message}`;
+    if (summaryBodyEl) summaryBodyEl.textContent = msg;
+    if (compareBodyEl) compareBodyEl.textContent = msg;
+    return '';
+  }
+}
+
+async function generateConclusion(question, myAnswer, inspirationSummary, blindspotSummary, apiKey, model) {
+  const conclusionCard = document.getElementById('board-conclusion-card');
+  const conclusionBody = document.getElementById('board-conclusion-body');
+  if (!conclusionBody) return;
+  if (conclusionCard) conclusionCard.classList.remove('board-conclusion-card--loading');
+
+  let userPrompt = `Two advisory boards responded to: "${question}"\n\nINSPIRATION BOARD SUMMARY (people the questioner admires):\n${inspirationSummary}\n\nBLIND SPOT BOARD SUMMARY (people with different views):\n${blindspotSummary}\n\n`;
+  if (myAnswer) userPrompt += `The questioner's current thinking: "${myAnswer}"\n\n`;
+  userPrompt += `Write a 4–5 paragraph cross-board conclusion:\n1. Genuine common ground — what both boards actually agree on despite their differences\n2. The core tension — where the boards fundamentally diverge and why it matters\n3. What the Blind Spot board sees that the Inspiration board underweights or misses\n4. Specific language and framing to discuss both perspectives tactfully with people who hold very different views\n${myAnswer ? '5. How the questioner’s own thinking holds up against the combined wisdom of both boards\n' : ''}Be direct and specific. Avoid vague diplomatic hedging.`;
+
+  const sysPrompt = 'You write cross-board syntheses comparing an Inspiration Board against a Blind Spot Board. Find genuine common ground, articulate real tensions honestly, and give practical advice on bridging the gap.';
+
+  conclusionBody.innerHTML = '<span class="board-typing">Writing conclusion…</span>';
+  let text = '';
+  try {
+    await streamClaudeSSE(apiKey, model, sysPrompt, userPrompt, chunk => {
+      if (!text) conclusionBody.innerHTML = '';
+      text += chunk;
+      conclusionBody.textContent = text;
+    }, 1200);
+    if (conclusionCard) conclusionCard.classList.add('board-conclusion-card--done');
+  } catch (err) {
+    conclusionBody.textContent = `Conclusion error: ${err.message}`;
+  }
+}
+
+async function askBothBoards(question, myAnswer) {
+  const apiKey = (settings.claudeApiKey || '').trim();
+  const model  = settings.boardModel || 'claude-haiku-4-5-20251001';
+  const inspirationMembers = settings.inspirationBoard || [];
+  const blindspotMembers   = settings.blindSpotBoard   || [];
+
+  if (!apiKey) { alert('Please add your Anthropic API key in Settings under "Board of Directors."'); return; }
+  if (!inspirationMembers.length && !blindspotMembers.length) { alert('No board members found. Open Settings to add some.'); return; }
+
+  const askBtn = document.getElementById('board-ask-btn');
+  askBtn.disabled = true;
+  askBtn.textContent = 'Asking…';
+
+  initBoardPanel('inspiration', question, myAnswer, inspirationMembers);
+  initBoardPanel('blindspot',   question, myAnswer, blindspotMembers);
+  initComparePanel(question, myAnswer);
+
+  let inspirationResponses = {}, blindspotResponses = {};
+  await Promise.all([
+    inspirationMembers.length ? streamBoardMembers('inspiration', inspirationMembers, question, myAnswer, apiKey, model).then(r => { inspirationResponses = r; }) : Promise.resolve(),
+    blindspotMembers.length   ? streamBoardMembers('blindspot',   blindspotMembers,   question, myAnswer, apiKey, model).then(r => { blindspotResponses   = r; }) : Promise.resolve(),
+  ]);
+
+  let inspirationSummary = '', blindspotSummary = '';
+  await Promise.all([
+    inspirationMembers.length ? generateBoardSummary('inspiration', question, myAnswer, inspirationResponses, apiKey, model).then(s => { inspirationSummary = s; }) : Promise.resolve(),
+    blindspotMembers.length   ? generateBoardSummary('blindspot',   question, myAnswer, blindspotResponses,   apiKey, model).then(s => { blindspotSummary   = s; }) : Promise.resolve(),
+  ]);
+
+  if (inspirationSummary && blindspotSummary) {
+    await generateConclusion(question, myAnswer, inspirationSummary, blindspotSummary, apiKey, model);
+  } else {
+    const conclusionBody = document.getElementById('board-conclusion-body');
+    const conclusionCard = document.getElementById('board-conclusion-card');
+    if (conclusionBody) conclusionBody.textContent = 'Add members to both boards to see a cross-board conclusion.';
+    if (conclusionCard) conclusionCard.classList.remove('board-conclusion-card--loading');
   }
 
   askBtn.disabled = false;
-  askBtn.textContent = 'Ask Board';
+  askBtn.textContent = 'Ask Boards';
 }
 
 // ── Board settings UI ─────────────────────────────────────────────────────────
 
-function renderBoardTags() {
-  const c = document.getElementById('board-tags');
-  const members = settings.boardMembers || [];
+function renderBoardTagsFor(containerId, members, settingsKey, renderFn) {
+  const c = document.getElementById(containerId);
+  if (!c) return;
   c.innerHTML = members.map((m, i) =>
-    `<span class="tag">${escHtml(m.name)}<span class="tag-remove" data-type="board" data-index="${i}" title="Remove">&#x2715;</span></span>`
+    `<span class="tag">${escHtml(m.name)}<span class="tag-remove" data-key="${settingsKey}" data-index="${i}" title="Remove">&#x2715;</span></span>`
   ).join('');
-  c.querySelectorAll('.tag-remove[data-type="board"]').forEach(btn =>
+  c.querySelectorAll('.tag-remove').forEach(btn =>
     btn.addEventListener('click', () => {
-      settings.boardMembers.splice(parseInt(btn.dataset.index, 10), 1);
-      renderBoardTags();
+      settings[btn.dataset.key].splice(parseInt(btn.dataset.index, 10), 1);
+      renderFn();
     })
   );
 }
 
-function addBoardMember() {
-  const nameInput  = document.getElementById('board-name-input');
-  const titleInput = document.getElementById('board-title-input');
+function renderInspirationTags() { renderBoardTagsFor('inspiration-tags', settings.inspirationBoard || [], 'inspirationBoard', renderInspirationTags); }
+function renderBlindspotTags()   { renderBoardTagsFor('blindspot-tags',   settings.blindSpotBoard   || [], 'blindSpotBoard',   renderBlindspotTags); }
+
+function addBoardMemberFor(nameId, titleId, settingsKey, renderFn) {
+  const nameInput  = document.getElementById(nameId);
+  const titleInput = document.getElementById(titleId);
   const name  = nameInput.value.trim();
   const title = titleInput.value.trim();
   if (!name) return;
-  if (!settings.boardMembers) settings.boardMembers = [];
-  if (!settings.boardMembers.some(m => m.name === name)) {
-    settings.boardMembers.push({name, title});
-  }
+  if (!settings[settingsKey]) settings[settingsKey] = [];
+  if (!settings[settingsKey].some(m => m.name === name)) settings[settingsKey].push({name, title});
   nameInput.value = ''; titleInput.value = '';
-  renderBoardTags();
+  renderFn();
   nameInput.focus();
 }
 
@@ -751,7 +876,8 @@ function syncBoardSettingsUI() {
   const sonnet = document.getElementById('model-sonnet');
   if (haiku)  haiku.checked  = model === 'claude-haiku-4-5-20251001';
   if (sonnet) sonnet.checked = model === 'claude-sonnet-4-6';
-  renderBoardTags();
+  renderInspirationTags();
+  renderBlindspotTags();
 }
 
 // ── Load all ──────────────────────────────────────────────────────────────────
@@ -905,15 +1031,30 @@ function init() {
   document.getElementById('board-btn').addEventListener('click', openBoardRoom);
   document.getElementById('close-board').addEventListener('click', closeBoardRoom);
 
+  document.getElementById('board-tab-strip').addEventListener('click', e => {
+    const btn = e.target.closest('.board-tab-btn');
+    if (btn) switchBoardTab(btn.dataset.tab);
+  });
+
   const boardQuestionInput = document.getElementById('board-question-input');
   const boardAskBtn = document.getElementById('board-ask-btn');
-  function triggerAskBoard() {
+  function triggerAskBoards() {
     const q = boardQuestionInput.value.trim();
+    const myAnswer = document.getElementById('board-my-answer-input').value.trim();
     if (!q || boardAskBtn.disabled) return;
-    askBoard(q);
+    askBothBoards(q, myAnswer || null);
   }
-  boardAskBtn.addEventListener('click', triggerAskBoard);
-  boardQuestionInput.addEventListener('keydown', e => { if (e.key === 'Enter') triggerAskBoard(); });
+  boardAskBtn.addEventListener('click', triggerAskBoards);
+  boardQuestionInput.addEventListener('keydown', e => { if (e.key === 'Enter') triggerAskBoards(); });
+
+  document.getElementById('board-my-answer-btn').addEventListener('click', () => {
+    const area = document.getElementById('board-my-answer-area');
+    const btn  = document.getElementById('board-my-answer-btn');
+    const isOpen = !area.classList.contains('hidden');
+    area.classList.toggle('hidden', isOpen);
+    btn.textContent = isOpen ? '+ Share your thinking first (optional)' : '− Hide your thinking';
+    if (!isOpen) document.getElementById('board-my-answer-input').focus();
+  });
 
   document.getElementById('save-api-key-btn').addEventListener('click', () => {
     settings.claudeApiKey = document.getElementById('claude-api-key-input').value.trim();
@@ -921,9 +1062,22 @@ function init() {
   document.querySelectorAll('input[name="board-model"]').forEach(radio =>
     radio.addEventListener('change', e => { settings.boardModel = e.target.value; })
   );
-  document.getElementById('add-board-btn').addEventListener('click', addBoardMember);
-  ['board-name-input','board-title-input'].forEach(id =>
-    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') addBoardMember(); })
+
+  document.getElementById('add-inspiration-btn').addEventListener('click', () =>
+    addBoardMemberFor('inspiration-name-input', 'inspiration-title-input', 'inspirationBoard', renderInspirationTags)
+  );
+  ['inspiration-name-input','inspiration-title-input'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') addBoardMemberFor('inspiration-name-input', 'inspiration-title-input', 'inspirationBoard', renderInspirationTags);
+    })
+  );
+  document.getElementById('add-blindspot-btn').addEventListener('click', () =>
+    addBoardMemberFor('blindspot-name-input', 'blindspot-title-input', 'blindSpotBoard', renderBlindspotTags)
+  );
+  ['blindspot-name-input','blindspot-title-input'].forEach(id =>
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') addBoardMemberFor('blindspot-name-input', 'blindspot-title-input', 'blindSpotBoard', renderBlindspotTags);
+    })
   );
 }
 

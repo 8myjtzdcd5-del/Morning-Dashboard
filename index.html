@@ -96,24 +96,63 @@
     </main>
 
     <div id="board-modal" class="board-modal hidden">
+
       <div class="board-modal-header">
         <div class="board-modal-title-group">
-          <h2 class="board-modal-title">&#9670; Board of Directors</h2>
-          <p class="board-modal-subtitle">Your personal advisory council</p>
+          <h2 class="board-modal-title">Board of Directors</h2>
+          <p class="board-modal-subtitle">My Inspiration Board &amp; My Blind Spot Board</p>
         </div>
         <button id="close-board" class="close-btn close-btn--board" aria-label="Close">&#x2715;</button>
       </div>
-      <div class="board-question-bar">
-        <input type="text" id="board-question-input" placeholder="Ask your board a question&hellip;" autocomplete="off">
-        <button id="board-ask-btn" class="btn-primary btn-ask">Ask Board</button>
-      </div>
-      <div class="board-results" id="board-results">
-        <div class="board-empty-state" id="board-empty-state">
-          <div class="board-empty-icon">&#9670;</div>
-          <p class="board-empty-title">Ready for your question</p>
-          <p class="board-empty-hint">Type a question above and your board will each respond based on their documented philosophy, voice, and perspective.</p>
+
+      <div class="board-question-section">
+        <div class="board-question-row">
+          <input type="text" id="board-question-input" class="board-question-input" placeholder="Ask both boards a question&hellip;" autocomplete="off">
+          <button id="board-ask-btn" class="btn-primary btn-ask">Ask Boards</button>
+        </div>
+        <div class="board-my-answer-toggle-row">
+          <button id="board-my-answer-btn" class="board-my-answer-btn">&#43; Share your thinking first (optional)</button>
+          <span class="board-my-answer-hint">If you enter your answer, every advisor responds to it &mdash; noting what&rsquo;s wise, unwise, and what you may be missing.</span>
+        </div>
+        <div id="board-my-answer-area" class="board-my-answer-area hidden">
+          <textarea id="board-my-answer-input" class="board-my-answer-input" placeholder="Your current thinking or potential answer&hellip;" rows="3"></textarea>
         </div>
       </div>
+
+      <div class="board-tab-strip" id="board-tab-strip">
+        <button class="board-tab-btn board-tab-btn--active" data-tab="inspiration">
+          <span class="btab-dot btab-dot--gold"></span>My Inspiration Board
+        </button>
+        <button class="board-tab-btn" data-tab="blindspot">
+          <span class="btab-dot btab-dot--purple"></span>My Blind Spot Board
+        </button>
+        <button class="board-tab-btn board-tab-btn--compare" data-tab="compare">&#9889;&nbsp;Compare Both</button>
+      </div>
+
+      <div class="board-results">
+        <div class="board-panel" id="board-panel-inspiration">
+          <div class="bpe bpe--gold">
+            <div class="bpe-icon">&#9733;</div>
+            <p class="bpe-title">My Inspiration Board</p>
+            <p class="bpe-hint">Ask a question above to hear from your advisors.</p>
+          </div>
+        </div>
+        <div class="board-panel hidden" id="board-panel-blindspot">
+          <div class="bpe bpe--purple">
+            <div class="bpe-icon">&#9671;</div>
+            <p class="bpe-title">My Blind Spot Board</p>
+            <p class="bpe-hint">Add members in Settings under &ldquo;My Blind Spot Board,&rdquo; then ask a question.</p>
+          </div>
+        </div>
+        <div class="board-panel hidden" id="board-panel-compare">
+          <div class="bpe bpe--neutral">
+            <div class="bpe-icon">&#9889;</div>
+            <p class="bpe-title">Compare Both Boards</p>
+            <p class="bpe-hint">Ask a question to see both boards&rsquo; perspectives side by side, with a cross-board conclusion.</p>
+          </div>
+        </div>
+      </div>
+
     </div>
 
     <div id="overlay" class="overlay hidden"></div>
@@ -232,14 +271,25 @@
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">Board Members</label>
-          <p class="setting-hint">20 advisors are pre-loaded. Add more or remove any. Each needs a name and a brief description.</p>
+          <label class="setting-label setting-label--gold">&#9733; My Inspiration Board</label>
+          <p class="setting-hint">People whose perspectives inspire you. 20 are pre-loaded &mdash; edit freely.</p>
           <div class="contact-input-row">
-            <input type="text" id="board-name-input" placeholder="Name" autocomplete="off">
-            <input type="text" id="board-title-input" placeholder="Title or description" autocomplete="off">
-            <button id="add-board-btn" class="btn-primary">Add</button>
+            <input type="text" id="inspiration-name-input" placeholder="Name" autocomplete="off">
+            <input type="text" id="inspiration-title-input" placeholder="Title or description" autocomplete="off">
+            <button id="add-inspiration-btn" class="btn-primary btn-board-gold">Add</button>
           </div>
-          <div id="board-tags" class="tags"></div>
+          <div id="inspiration-tags" class="tags"></div>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label setting-label--purple">&#9671; My Blind Spot Board</label>
+          <p class="setting-hint">People who challenge your assumptions and see the world differently. Start blank &mdash; build your own list.</p>
+          <div class="contact-input-row">
+            <input type="text" id="blindspot-name-input" placeholder="Name" autocomplete="off">
+            <input type="text" id="blindspot-title-input" placeholder="Title or description" autocomplete="off">
+            <button id="add-blindspot-btn" class="btn-primary btn-board-purple">Add</button>
+          </div>
+          <div id="blindspot-tags" class="tags"></div>
         </div>
 
         <div class="setting-group">
