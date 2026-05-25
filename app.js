@@ -1,5 +1,3 @@
-'use strict';
-
 const RECENT_DAYS = 14;
 const HISTORY_DAYS = 730;
 const HIST_PREFIX = 'mdHist_';
@@ -112,12 +110,10 @@ async function fetchYahooQuotes(symbols) {
     if (!r?.length) throw new Error('empty');
     return r;
   };
-  // Try direct browser fetch first (no proxy — fastest if Yahoo allows it)
   const direct = ['https://query1.finance.yahoo.com','https://query2.finance.yahoo.com'].map(base =>
     fetch(`${base}/v7/finance/quote?symbols=${syms}&formatted=false`, {signal:sig(5000)})
       .then(r=>r.text()).then(parse)
   );
-  // Also race through proxies simultaneously
   const viaProxy = proxyFetch(
     `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&formatted=false`, 8000
   ).then(parse);
@@ -236,32 +232,63 @@ function renderWeather(location, attempt=1) {
   });
 }
 
-// ── Quote of the day (ZenQuotes, CORS-native) ─────────────────────────────────
+// ── Quote of the day ──────────────────────────────────────────────────────────
+// Refreshes at page load, then again at noon (12:00), 6 PM (18:00), midnight (0:00)
+
+function getQuoteSlot() {
+  // Returns 0, 1, 2, or 3 depending on which 6-hour block we're in
+  const h = new Date().getHours();
+  if (h < 6)  return 0; // midnight–6am
+  if (h < 12) return 1; // 6am–noon
+  if (h < 18) return 2; // noon–6pm
+  return 3;             // 6pm–midnight
+}
+
+function scheduleNextQuoteRefresh() {
+  const now = new Date();
+  const next = new Date(now);
+  const h = now.getHours();
+
+  // Find the next refresh boundary: midnight, noon, or 6pm
+  if (h < 12)       { next.setHours(12, 0, 0, 0); }
+  else if (h < 18)  { next.setHours(18, 0, 0, 0); }
+  else              { next.setDate(next.getDate() + 1); next.setHours(0, 0, 0, 0); }
+
+  const msUntilNext = next.getTime() - now.getTime();
+  setTimeout(() => {
+    renderQuote();
+    scheduleNextQuoteRefresh(); // schedule the one after that
+  }, msUntilNext);
+}
 
 async function renderQuote() {
   const el = document.getElementById('quote-feed');
   el.innerHTML = '<p class="feed-loading">Loading quote&hellip;</p>';
+
+  // Use the random endpoint so each slot gets a fresh quote
+  const endpoint = 'https://zenquotes.io/api/random';
+
   try {
-    const resp = await fetch('https://zenquotes.io/api/today', {signal:sig(6000)});
+    const resp = await fetch(endpoint, {signal:sig(6000)});
     const [q] = await resp.json();
-    el.innerHTML = `<div class="quote-card">
-      <div class="quote-mark">&ldquo;</div>
-      <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
-      <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
-    </div>`;
+    el.innerHTML = buildQuoteHtml(q.q, q.a);
   } catch {
     try {
-      const contents = await proxyFetch('https://zenquotes.io/api/today', 6000);
+      const contents = await proxyFetch(endpoint, 6000);
       const [q] = JSON.parse(contents);
-      el.innerHTML = `<div class="quote-card">
-        <div class="quote-mark">&ldquo;</div>
-        <blockquote class="quote-text">${escHtml(q.q)}</blockquote>
-        <div class="quote-author">&mdash; ${escHtml(q.a)}</div>
-      </div>`;
+      el.innerHTML = buildQuoteHtml(q.q, q.a);
     } catch {
-      el.innerHTML = '<p class="feed-loading">Quote unavailable today.</p>';
+      el.innerHTML = '<p class="feed-loading">Quote unavailable.</p>';
     }
   }
+}
+
+function buildQuoteHtml(quote, author) {
+  return `<div class="quote-card">
+    <div class="quote-mark">&ldquo;</div>
+    <blockquote class="quote-text">${escHtml(quote)}</blockquote>
+    <div class="quote-author">&mdash; ${escHtml(author)}</div>
+  </div>`;
 }
 
 // ── Special Dates ─────────────────────────────────────────────────────────────
@@ -329,7 +356,6 @@ function parseXmlItems(xml, limit) {
 
 async function fetchNews(query, limit=8) {
   const rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
-  // Race rss2json (no proxy) vs. parallel proxy race — first winner is used
   const viaRss2json = fetch(
     `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}&count=${limit}`,
     {signal: sig(8000)}
@@ -448,7 +474,7 @@ function renderStocks(tickers) {
   fetchStocks(tickers).then(stocks=>{
     if (!stocks.length) { container.innerHTML=buildEmptyState('No data returned.','Check your ticker symbols.'); return; }
     container.innerHTML=stocks.map(s=>{
-      const up=s.change>=0,sign=up?'+':'',fmt=n=>n!=null?n.toFixed(2):'—';
+      const up=s.change>=0,sign=up?'+':'',fmt=n=>n!=null?n.toFixed(2):'--';
       return `<div class="stock-card ${up?'up':'down'}">
         <div class="stock-symbol">${escHtml(s.symbol)}</div>
         <div class="stock-name">${escHtml(s.name)}</div>
@@ -618,9 +644,38 @@ function importSettings(file) {
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
+// ── Section title colors ──────────────────────────────────────────────────────
+// Colorizes each section's title underline using existing feed IDs --
+// no changes to index.html required.
+
+function applySectionColors() {
+  const map = [
+    { feedId: 'stocks-feed',     color: '#10b981' }, // emerald
+    { feedId: 'quote-feed',      color: '#8b5cf6' }, // violet
+    { feedId: 'milestones-feed', color: '#f59e0b' }, // amber
+    { feedId: 'news-feed',       color: '#3b82f6' }, // blue
+    { feedId: 'people-feed',     color: '#ec4899' }, // pink
+    { feedId: 'topics-feed',     color: '#14b8a6' }, // teal
+    { feedId: 'clients-feed',    color: '#f97316' }, // orange
+    { feedId: 'prospects-feed',  color: '#6366f1' }, // indigo
+    { feedId: 'wishlist-feed',   color: '#84cc16' }, // lime
+    { feedId: 'f1-feed',         color: '#e10600' }, // F1 red
+  ];
+  map.forEach(({feedId, color}) => {
+    const feed = document.getElementById(feedId);
+    if (!feed) return;
+    const section = feed.closest('section') || feed.parentElement;
+    const title = section && section.querySelector('.section-title');
+    if (title) title.style.borderBottomColor = color;
+  });
+}
+
 function init() {
   updateDateTime(); setInterval(updateDateTime,30000);
   loadAllFeeds();
+  applySectionColors();
+  scheduleNextQuoteRefresh(); // auto-refresh quote at noon, 6pm, midnight
+
   document.getElementById('settings-btn').addEventListener('click',openSettings);
   document.getElementById('close-settings').addEventListener('click',closeSettings);
   document.getElementById('overlay').addEventListener('click',closeSettings);
