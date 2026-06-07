@@ -546,6 +546,37 @@ function memberInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
+function rosterChipsHTML(members) {
+  return members.map(m => {
+    const hue = memberHue(m.name);
+    return `<span class="board-roster-chip" style="background:hsl(${hue},45%,20%);border-color:hsl(${hue},45%,40%);color:hsl(${hue},75%,84%)">${escHtml(m.name)}</span>`;
+  }).join('');
+}
+
+function renderBoardEmptyState(boardType) {
+  const panel = document.getElementById(`board-panel-${boardType}`);
+  if (!panel) return;
+  const isInspiration = boardType === 'inspiration';
+  const colorClass = isInspiration ? 'gold' : 'purple';
+  const icon = isInspiration ? '&#9733;' : '&#9671;';
+  const boardName = isInspiration ? 'My Inspiration Board' : 'My Blind Spot Board';
+  const members = (isInspiration ? settings.inspirationBoard : settings.blindSpotBoard) || [];
+  const settingsLabel = isInspiration ? 'My Inspiration Board' : 'My Blind Spot Board';
+  panel.innerHTML = `<div class="bpe bpe--${colorClass}">
+    <div class="bpe-icon">${icon}</div>
+    <p class="bpe-title">${boardName}</p>
+    ${members.length
+      ? `<div class="board-roster board-roster--${colorClass}">${rosterChipsHTML(members)}</div><p class="bpe-hint">Ask a question above to hear from these advisors.</p>`
+      : `<p class="bpe-hint">No members yet. Open Settings under &ldquo;${settingsLabel}&rdquo; to add some.</p>`}
+  </div>`;
+}
+
+function syncBoardEmptyState(boardType) {
+  const panel = document.getElementById(`board-panel-${boardType}`);
+  if (!panel || !panel.querySelector('.bpe')) return;
+  renderBoardEmptyState(boardType);
+}
+
 function openBoardRoom() {
   document.getElementById('board-modal').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -649,6 +680,7 @@ function initBoardPanel(boardType, question, myAnswer, members) {
   }
 
   panel.innerHTML = `
+    <div class="board-roster board-roster--${colorClass}">${rosterChipsHTML(members)}</div>
     <div class="board-question-echo">&ldquo;${escHtml(question)}&rdquo;</div>
     ${myAnswer ? `<div class="board-my-answer-echo"><strong>Your thinking:</strong> ${escHtml(myAnswer)}</div>` : ''}
     <div class="board-members-grid" id="grid-${boardType}"></div>
@@ -852,8 +884,14 @@ function renderBoardTagsFor(containerId, members, settingsKey, renderFn) {
   );
 }
 
-function renderInspirationTags() { renderBoardTagsFor('inspiration-tags', settings.inspirationBoard || [], 'inspirationBoard', renderInspirationTags); }
-function renderBlindspotTags()   { renderBoardTagsFor('blindspot-tags',   settings.blindSpotBoard   || [], 'blindSpotBoard',   renderBlindspotTags); }
+function renderInspirationTags() {
+  renderBoardTagsFor('inspiration-tags', settings.inspirationBoard || [], 'inspirationBoard', renderInspirationTags);
+  syncBoardEmptyState('inspiration');
+}
+function renderBlindspotTags() {
+  renderBoardTagsFor('blindspot-tags', settings.blindSpotBoard || [], 'blindSpotBoard', renderBlindspotTags);
+  syncBoardEmptyState('blindspot');
+}
 
 function addBoardMemberFor(nameId, titleId, settingsKey, renderFn) {
   const nameInput  = document.getElementById(nameId);
@@ -1028,6 +1066,8 @@ function init() {
   });
 
   // Board Room
+  renderBoardEmptyState('inspiration');
+  renderBoardEmptyState('blindspot');
   document.getElementById('board-btn').addEventListener('click', openBoardRoom);
   document.getElementById('close-board').addEventListener('click', closeBoardRoom);
 

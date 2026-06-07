@@ -595,6 +595,21 @@ h1 { font-size: clamp(1.5rem, 2.5vw, 2rem); font-weight: 700; letter-spacing: -0
 .bpe--purple .bpe-icon { color: #7c3aed; }
 .bpe--neutral .bpe-icon { color: var(--accent); }
 
+/* Board roster — always-visible member name chips */
+.board-roster {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.board-roster-chip {
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.01em;
+  padding: 5px 12px; border-radius: 999px; border: 1px solid; line-height: 1.3;
+}
+.bpe .board-roster {
+  justify-content: center; max-width: 560px; margin: 14px auto 6px;
+}
+.board-panel > .board-roster {
+  margin: 0 0 18px;
+}
+
 /* Question & answer echo */
 .board-question-echo {
   font-size: 1rem; font-style: italic; color: var(--text-muted);
